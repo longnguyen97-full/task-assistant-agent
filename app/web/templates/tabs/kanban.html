@@ -1,0 +1,108 @@
+<!-- TAB 3: KANBAN TASK BOARD & MONTHLY REPORT -->
+<section id="tab-kanban" class="tab-content">
+  <div class="kanban-header">
+    <div class="kanban-title-box">
+      <h2><i class="fa-solid fa-layer-group"></i> Bảng Quản Lý Công Việc (Kanban Tasks)</h2>
+      <p>Tổng hợp các công việc từ Teams/Email, Dự án mới, Change Requests và Task thủ công</p>
+    </div>
+    <div class="kanban-actions">
+      <div class="search-box">
+        <i class="fa-solid fa-magnifying-glass"></i>
+        <input type="text" id="taskSearchInput" placeholder="Tìm kiếm task, dự án, tags...">
+      </div>
+      <button class="btn-action-outline btn-highlight" id="btnExportMonthlyReport" title="Xuất file báo cáo hàng tháng Excel (.xlsx) chuẩn theo mẫu doanh nghiệp">
+        <i class="fa-solid fa-file-excel"></i> <span>Xuất Báo Cáo Tháng (.xlsx)</span>
+      </button>
+      <button class="btn-action-danger" id="btnClearAllTasks" onclick="clearAllTasks(event)" title="Xóa toàn bộ tasks trong hệ thống">
+        <i class="fa-solid fa-trash-can"></i> <span>Xóa Hết</span>
+      </button>
+      <button class="btn-action-primary" id="btnOpenNewTaskModal">
+        <i class="fa-solid fa-plus"></i> <span>Tạo Task Mới</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Filter Toolbar (Source & Project) -->
+  <div class="kanban-filter-bar">
+    <div class="filter-pills-group" id="kanbanSourceFilters">
+      <button class="filter-pill active" data-source="ALL">
+        <span>Tất cả</span>
+      </button>
+      <button class="filter-pill" data-source="TEAMS_EMAIL">
+        <i class="fa-solid fa-bolt-lightning text-warning"></i> <span>Teams / Email</span>
+      </button>
+      <button class="filter-pill" data-source="PROJECT_NEW">
+        <i class="fa-solid fa-rocket text-purple"></i> <span>Dự Án Mới</span>
+      </button>
+      <button class="filter-pill" data-source="CHANGE_REQUEST">
+        <i class="fa-solid fa-arrows-rotate text-danger"></i> <span>Change Request</span>
+      </button>
+      <button class="filter-pill" data-source="MANUAL">
+        <i class="fa-solid fa-pen-to-square text-cyan"></i> <span>Thủ Công</span>
+      </button>
+    </div>
+
+    <div class="filter-select-group">
+      <label for="kanbanWebsiteFilter"><i class="fa-solid fa-globe"></i> Website:</label>
+      <select id="kanbanWebsiteFilter">
+        <option value="ALL">-- Tất cả hệ thống --</option>
+        <option value="KIG">KIG</option>
+        <option value="SIS/SVIS">SIS / SVIS</option>
+        <option value="KIK">KIK</option>
+        <option value="Pegasus">Pegasus</option>
+        <option value="SISH">SISH</option>
+        <option value="OBV">OBV</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="kanban-board">
+    <!-- Col 1: TODO -->
+    <div class="kanban-column" data-status="TODO">
+      <div class="col-header todo">
+        <div class="col-title">
+          <span class="status-bullet"></span>
+          <span>Cần làm (TODO)</span>
+        </div>
+        <span class="col-count" id="countColTodo">0</span>
+      </div>
+      <div class="col-cards" id="cardsTodo"></div>
+    </div>
+
+    <!-- Col 2: IN_PROGRESS -->
+    <div class="kanban-column" data-status="IN_PROGRESS">
+      <div class="col-header in-progress">
+        <div class="col-title">
+          <span class="status-bullet"></span>
+          <span>Đang thực hiện</span>
+        </div>
+        <span class="col-count" id="countColInProgress">0</span>
+      </div>
+      <div class="col-cards" id="cardsInProgress"></div>
+    </div>
+
+    <!-- Col 3: BLOCKED -->
+    <div class="kanban-column" data-status="BLOCKED">
+      <div class="col-header blocked">
+        <div class="col-title">
+          <span class="status-bullet"></span>
+          <span>Bị nghẽn (BLOCKED)</span>
+        </div>
+        <span class="col-count" id="countColBlocked">0</span>
+      </div>
+      <div class="col-cards" id="cardsBlocked"></div>
+    </div>
+
+    <!-- Col 4: DONE -->
+    <div class="kanban-column" data-status="DONE">
+      <div class="col-header done">
+        <div class="col-title">
+          <span class="status-bullet"></span>
+          <span>Hoàn thành (DONE)</span>
+        </div>
+        <span class="col-count" id="countColDone">0</span>
+      </div>
+      <div class="col-cards" id="cardsDone"></div>
+    </div>
+  </div>
+</section>

@@ -1,0 +1,20 @@
+<!-- In-App Glassmorphic Confirmation Modal (Replaces unreliable window.confirm) -->
+<div class="modal-overlay" id="confirmDialogModal" style="z-index: 9999;">
+  <div class="modal-card" style="max-width: 440px; border: 1px solid rgba(244, 63, 94, 0.4); box-shadow: 0 20px 45px rgba(0, 0, 0, 0.85); background: #0f172a;">
+    <div class="modal-header" style="border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding: 16px 20px;">
+      <h3 id="confirmDialogTitle" style="color: #fda4af; font-size: 1.05rem; display: flex; align-items: center; gap: 8px;">
+        <i class="fa-solid fa-triangle-exclamation text-danger"></i> <span>Xác Nhận</span>
+      </h3>
+      <button type="button" class="btn-modal-close" id="btnCancelConfirmDialog" title="Đóng"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal-form" style="padding: 20px; gap: 1.25rem;">
+      <p id="confirmDialogMessage" style="color: var(--text-main); font-size: 0.92rem; line-height: 1.5; margin: 0;"></p>
+      <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 6px;">
+        <button type="button" class="btn-action-outline" id="btnConfirmDismiss">Hủy Bỏ</button>
+        <button type="button" class="btn-action-danger" id="btnConfirmAccept" style="box-shadow: 0 0 14px rgba(244, 63, 94, 0.35);">
+          <i class="fa-solid fa-trash-can"></i> <span>Xác Nhận Xóa</span>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>

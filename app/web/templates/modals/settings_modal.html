@@ -1,0 +1,77 @@
+<!-- MODAL: SETTINGS -->
+<div class="modal-overlay" id="settingsModal">
+  <div class="modal-card wide">
+    <div class="modal-header">
+      <h3><i class="fa-solid fa-sliders"></i> Cài Đặt Hệ Thống & Trí Tuệ Nhân Tạo</h3>
+      <button class="btn-modal-close" id="btnCloseSettingsModal"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <form id="settingsForm" class="modal-form">
+      <!-- AI Settings -->
+      <div class="settings-section">
+        <h4 class="settings-section-title"><i class="fa-brands fa-google"></i> Mô Hình Trí Tuệ Nhân Tạo (Google Gemini)</h4>
+        <div class="form-group">
+          <label>Gemini API Key</label>
+          <div class="input-with-action">
+            <input type="password" id="settingGeminiApiKey" placeholder="Nhập Google Gemini API Key của bạn...">
+            <button type="button" class="btn-toggle-vis" id="btnToggleApiKeyVis"><i class="fa-solid fa-eye"></i></button>
+          </div>
+          <span class="field-hint">Chưa có key? Lấy miễn phí tại <a href="https://aistudio.google.com/" target="_blank" rel="noopener">Google AI Studio</a>.</span>
+        </div>
+        <div class="form-group">
+          <label>Mô hình (Model)</label>
+          <select id="settingGeminiModel">
+            <option value="gemini-flash-latest" selected>Gemini Flash Latest (Khuyến nghị - Nhanh & Mới nhất)</option>
+            <option value="gemini-3.8-flash">Gemini 3.8 Flash (Thông minh & Ổn định)</option>
+            <option value="gemini-3-flash-preview">Gemini 3 Flash Preview</option>
+            <option value="gemini-1.5-pro">Gemini 1.5 Pro (Suy luận sâu)</option>
+            <option value="gemini-1.5-flash">Gemini 1.5 Flash</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- SMTP Settings -->
+      <div class="settings-section">
+        <h4 class="settings-section-title"><i class="fa-solid fa-envelope"></i> Cấu Hình SMTP Gửi Email</h4>
+        <div class="form-row">
+          <div class="form-group">
+            <label>SMTP Host</label>
+            <input type="text" id="settingSmtpHost" placeholder="smtp.gmail.com">
+          </div>
+          <div class="form-group">
+            <label>SMTP Port</label>
+            <input type="number" id="settingSmtpPort" value="587">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>SMTP Username / Email</label>
+            <input type="text" id="settingSmtpUser" placeholder="your-email@gmail.com">
+          </div>
+          <div class="form-group">
+            <label>SMTP Password / App Password</label>
+            <input type="password" id="settingSmtpPassword" placeholder="Mật khẩu ứng dụng...">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Email Người Nhận Báo Cáo (Dev/Lead)</label>
+            <input type="email" id="settingDevEmail" placeholder="developer@company.com">
+          </div>
+          <div class="form-group">
+            <label>Bật bảo mật TLS</label>
+            <select id="settingSmtpTls">
+              <option value="true">Bật TLS (Khuyến nghị)</option>
+              <option value="false">Tắt TLS</option>
+            </select>
+          </div>
+        </div>
+        <span class="field-hint">💡 Nếu chưa nhập SMTP, hệ thống sẽ tự động hoạt động ở chế độ <strong>Mô phỏng (Mock Outbox)</strong> và lưu lại toàn bộ email để xem trước.</span>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn-action-outline" id="btnCancelSettingsModal">Đóng</button>
+        <button type="submit" class="btn-action-primary">Lưu Cài Đặt</button>
+      </div>
+    </form>
+  </div>
+</div>

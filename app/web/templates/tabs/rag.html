@@ -1,0 +1,82 @@
+<!-- TAB 5: 2-TIER RAG TECHNICAL KNOWLEDGE BASE -->
+<section id="tab-rag" class="tab-content">
+  <div class="rag-container">
+    <div class="rag-left-panel">
+      <div class="panel-header">
+        <div class="panel-title-group">
+          <h3><i class="fa-solid fa-book-bookmark"></i> Kho Tài Liệu Kỹ Thuật (2 Tầng)</h3>
+          <p class="panel-subtitle">Tài liệu kỹ thuật chung toàn hệ thống + Tài liệu riêng từng website & dự án</p>
+        </div>
+        <button class="btn-action-outline" id="btnReindexDocs" title="Chạy lập lại chỉ mục vector">
+          <i class="fa-solid fa-arrows-rotate"></i> <span>Index Lại</span>
+        </button>
+      </div>
+
+      <!-- Upload Area with Scope Selector -->
+      <div class="rag-upload-box">
+        <div class="upload-category-selector">
+          <label><i class="fa-solid fa-tag"></i> Phân loại tài liệu:</label>
+          <div class="category-radio-group">
+            <label class="cat-pill active">
+              <input type="radio" name="docCategory" value="GENERAL" checked>
+              <span>🌐 Kỹ thuật chung</span>
+            </label>
+            <label class="cat-pill">
+              <input type="radio" name="docCategory" value="PROJECT">
+              <span>📁 Dự án riêng / Website</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="upload-dropzone" id="dropZone">
+          <i class="fa-solid fa-cloud-arrow-up drop-icon"></i>
+          <p class="drop-text">Kéo thả file tài liệu vào đây hoặc <span>chọn file</span></p>
+          <span class="drop-hint">Hỗ trợ Markdown (.md), PDF (.pdf), Excel (.xlsx), Text (.txt), CSV (.csv)</span>
+          <input type="file" id="fileUploadInput" accept=".md,.txt,.pdf,.xlsx,.xls,.csv" style="display: none;">
+        </div>
+      </div>
+
+      <!-- 2-Tier Document Collections View -->
+      <div class="docs-list-box">
+        <div class="docs-tabs-nav">
+          <button class="doc-tab-btn active" data-doctype="ALL" id="docTabAll">
+            Tất Cả (<span id="ragTotalCount">0</span>)
+          </button>
+          <button class="doc-tab-btn" data-doctype="GENERAL" id="docTabGeneral">
+            🌐 Kỹ Thuật Chung
+          </button>
+          <button class="doc-tab-btn" data-doctype="PROJECT" id="docTabProject">
+            📁 Dự Án Riêng
+          </button>
+        </div>
+        <div class="docs-list-meta">
+          <span class="chunks-info" id="ragChunksInfo">0 chunks vector ChromaDB</span>
+        </div>
+        <div class="docs-cards" id="indexedDocsList">
+          <!-- Injected via JS -->
+        </div>
+      </div>
+    </div>
+
+    <!-- Right Panel: Hybrid & Semantic Search -->
+    <div class="rag-right-panel">
+      <div class="panel-header">
+        <h3><i class="fa-solid fa-magnifying-glass-nodes"></i> Tra Cứu Trực Tiếp (Vector Semantic Search)</h3>
+      </div>
+      <div class="rag-search-box">
+        <div class="search-input-group">
+          <input type="text" id="ragTestInput" placeholder="Ví dụ: Quy định backup website, Milestone Sprint 2, cấu hình Nginx...">
+          <button class="btn-action-primary" id="btnRunRagSearch">
+            <i class="fa-solid fa-search"></i> Tra Cứu
+          </button>
+        </div>
+      </div>
+      <div class="rag-results-area" id="ragSearchResults">
+        <div class="empty-state">
+          <i class="fa-solid fa-book-open"></i>
+          <p>Nhập từ khóa hoặc câu hỏi để tra cứu thông tin chính xác từ ChromaDB Vector Database.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>

@@ -1,0 +1,13 @@
+/* ==========================================================================
+   TASK ASSISTANT AGENT - MASTER STYLESHEET
+   Modular CSS Architecture (< 500 lines per module)
+   ========================================================================== */
+
+@import url("./css/variables.css");
+@import url("./css/layout.css");
+@import url("./css/chat.css");
+@import url("./css/quick_ingest.css");
+@import url("./css/kanban.css");
+@import url("./css/projects.css");
+@import url("./css/rag.css");
+@import url("./css/modals.css");

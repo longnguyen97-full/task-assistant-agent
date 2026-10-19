@@ -1,0 +1,152 @@
+<!-- TAB 4: PROJECTS, TIMELINE PLANNING & SCOPE CHANGE NOTES -->
+<section id="tab-projects" class="tab-content">
+  <div class="projects-container">
+    <!-- Header -->
+    <div class="projects-header">
+      <div class="projects-title-box">
+        <h2><i class="fa-solid fa-diagram-project"></i> Quản Lý Dự Án & Timeline Kế Hoạch</h2>
+        <p>Theo dõi tiến độ 4 giai đoạn WBS, quản lý timeline và bảo toàn kế hoạch gốc khi có thay đổi</p>
+      </div>
+      <div class="projects-header-actions">
+        <button type="button" class="btn-action-primary" id="btnOpenNewProjectModal">
+          <i class="fa-solid fa-plus"></i> <span>Họp Dự Án Mới</span>
+        </button>
+        <button type="button" class="btn-action-warning" id="btnOpenChangeNoteModal">
+          <i class="fa-solid fa-arrows-rotate"></i> <span>Ghi Nhận Thay Đổi</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Active Projects & Timeline Grid (Main Hero Content) -->
+    <div class="projects-list-section">
+      <div class="section-title-bar">
+        <h3><i class="fa-solid fa-folder-open"></i> Danh Sách Dự Án & Timeline 4 Giai Đoạn</h3>
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <span class="badge-tag purple" id="projectsCountBadge">0 dự án</span>
+          <button type="button" class="btn-icon" id="btnRefreshProjects" title="Làm mới danh sách"><i class="fa-solid fa-rotate"></i></button>
+        </div>
+      </div>
+
+      <div class="projects-display-grid" id="projectsDisplayGrid">
+        <!-- Rendered dynamically via projects.js -->
+        <div class="ops-loading-state">
+          <i class="fa-solid fa-circle-notch fa-spin"></i>
+          <p>Đang tải danh sách dự án...</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODAL 1: Họp Dự Án Mới (Planner) -->
+    <div class="modal-overlay" id="newProjectModal">
+      <div class="modal-card wide">
+        <div class="modal-header">
+          <h3 style="color: var(--accent-purple);"><i class="fa-solid fa-rocket"></i> Họp Dự Án Mới - Sinh Kế Hoạch 4 Pha & Timeline</h3>
+          <button type="button" class="btn-modal-close" id="btnCloseNewProjectModal" title="Đóng"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div class="modal-form" style="max-height: 80vh; overflow-y: auto;">
+          <form id="newProjectForm" class="project-form">
+            <div class="form-group">
+              <label for="newProjectName"><i class="fa-solid fa-tag"></i> Tên Dự Án Mới <span class="required">*</span></label>
+              <input type="text" id="newProjectName" placeholder="Ví dụ: Cổng Thông Tin Tuyển Sinh Quốc Tế..." required>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group flex-1">
+                <label for="newProjectDeadline"><i class="fa-solid fa-calendar-check"></i> Hạn Chót Dự Kiến</label>
+                <input type="date" id="newProjectDeadline" onclick="try{this.showPicker()}catch(e){}">
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="newProjectRequirements"><i class="fa-solid fa-file-lines"></i> Nội Dung Cuộc Họp / Yêu Cầu Chức Năng <span class="required">*</span></label>
+              <textarea id="newProjectRequirements" rows="4" placeholder="Nhập tóm tắt yêu cầu từ cuộc họp: mục tiêu, tính năng cần có, công nghệ dự kiến, tài nguyên..." required></textarea>
+            </div>
+
+            <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 10px;">
+              <button type="button" class="btn-action-outline" id="btnCancelNewProjectModal">Đóng</button>
+              <button type="submit" class="btn-action-primary" id="btnGeneratePlan">
+                <i class="fa-solid fa-wand-magic-sparkles"></i> <span>Tạo Kế Hoạch & Timeline (4 Pha)</span>
+              </button>
+            </div>
+          </form>
+
+          <!-- Preview Result Container -->
+          <div class="plan-preview-box" id="planPreviewBox" style="display: none; margin-top: 15px;">
+            <div class="preview-header">
+              <h4><i class="fa-solid fa-list-check"></i> Bản Kế Hoạch & Timeline Đã Sinh</h4>
+              <button type="button" class="btn-icon-tiny" id="btnClosePlanPreview" title="Đóng preview"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="preview-content markdown-body" id="planPreviewContent">
+              <!-- Rendered via marked.js -->
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODAL 2: Họp Dự Án Đang Chạy (Change Request Logger) -->
+    <div class="modal-overlay" id="changeNoteModal">
+      <div class="modal-card wide">
+        <div class="modal-header">
+          <h3 style="color: var(--accent-amber);"><i class="fa-solid fa-arrows-rotate"></i> Họp Dự Án Đang Chạy - Ghi Nhận Thay Đổi (Bảo Toàn Timeline)</h3>
+          <button type="button" class="btn-modal-close" id="btnCloseChangeNoteModal" title="Đóng"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div class="modal-form" style="max-height: 80vh; overflow-y: auto;">
+          <!-- Strict Preservation Alert Banner -->
+          <div class="alert-banner-safe" style="margin-bottom: 14px;">
+            <i class="fa-solid fa-shield-halved"></i>
+            <div>
+              <strong>Nguyên Tắc Bảo Toàn Timeline:</strong>
+              <span>Các ý thay đổi được lưu riêng vào Nhật Ký Thay Đổi và sinh task theo dõi, tuyệt đối KHÔNG chỉnh sửa timeline gốc đã duyệt.</span>
+            </div>
+          </div>
+
+          <form id="changeNoteForm" class="project-form">
+            <div class="form-group">
+              <label for="changeProjectSelect"><i class="fa-solid fa-folder"></i> Chọn Dự Án Đang Chạy <span class="required">*</span></label>
+              <select id="changeProjectSelect" required>
+                <option value="">-- Đang tải danh sách dự án... --</option>
+              </select>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group flex-2">
+                <label for="changeNoteTitle"><i class="fa-solid fa-pen"></i> Tóm Tắt Ý Thay Đổi <span class="required">*</span></label>
+                <input type="text" id="changeNoteTitle" placeholder="Ví dụ: Đổi cơ chế xác thực từ Password sang SSO Google..." required>
+              </div>
+              <div class="form-group flex-1">
+                <label for="changeNoteAuthor"><i class="fa-solid fa-user"></i> Người Yêu Cầu</label>
+                <input type="text" id="changeNoteAuthor" placeholder="Khách hàng / Sếp / Tech Lead" value="Khách hàng">
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="changeNoteContent"><i class="fa-solid fa-file-pen"></i> Chi Tiết Nội Dung Thay Đổi & Lý Do <span class="required">*</span></label>
+              <textarea id="changeNoteContent" rows="4" placeholder="Ghi nhận chi tiết: lý do thay đổi, giải pháp kỹ thuật, phạm vi ảnh hưởng (không sửa deadline gốc)..." required></textarea>
+            </div>
+
+            <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 10px;">
+              <button type="button" class="btn-action-outline" id="btnCancelChangeNoteModal">Hủy</button>
+              <button type="submit" class="btn-action-warning" id="btnRecordChangeNote">
+                <i class="fa-solid fa-clipboard-check"></i> <span>Ghi Nhận Thay Đổi (Bảo Toàn Timeline)</span>
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODAL 3: Project Detail & Phases Modal -->
+    <div class="modal-overlay" id="projectDetailModal">
+      <div class="modal-card wide">
+        <div class="modal-header">
+          <h3 id="projectDetailModalTitle"><i class="fa-solid fa-diagram-project"></i> Chi Tiết Dự Án & Timeline Giai Đoạn</h3>
+          <button type="button" class="btn-modal-close" id="btnCloseProjectDetailModal"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div class="modal-form" id="projectDetailBody" style="max-height: 75vh; overflow-y: auto; gap: 1.25rem;">
+          <!-- Injected via projects.js -->
+        </div>
+      </div>
+    </div>
+  </div>
+</section>

@@ -1,0 +1,65 @@
+<!-- MODAL: TASK FORM (CREATE / EDIT) -->
+<div class="modal-overlay" id="taskModal">
+  <div class="modal-card">
+    <div class="modal-header">
+      <h3 id="taskModalTitle"><i class="fa-solid fa-plus-circle"></i> Tạo Task Mới</h3>
+      <button class="btn-modal-close" id="btnCloseTaskModal"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <form id="taskForm" class="modal-form">
+      <input type="hidden" id="taskFormId">
+      <div class="form-group">
+        <label>Tiêu đề công việc <span class="required">*</span></label>
+        <input type="text" id="taskFormTitle" placeholder="Ví dụ: Tích hợp OAuth2 Google Login" required>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Trạng thái</label>
+          <select id="taskFormStatus">
+            <option value="TODO">TODO (Cần làm)</option>
+            <option value="IN_PROGRESS">IN_PROGRESS (Đang làm)</option>
+            <option value="BLOCKED">BLOCKED (Bị nghẽn)</option>
+            <option value="DONE">DONE (Hoàn thành)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Mức độ ưu tiên</label>
+          <select id="taskFormPriority">
+            <option value="LOW">LOW (Thấp)</option>
+            <option value="MEDIUM" selected>MEDIUM (Vừa)</option>
+            <option value="HIGH">HIGH (Cao)</option>
+            <option value="URGENT">URGENT (Khẩn cấp)</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Người phụ trách</label>
+          <input type="text" id="taskFormAssignee" value="Developer">
+        </div>
+        <div class="form-group">
+          <label>Hạn chót (Deadline)</label>
+          <input type="date" id="taskFormDeadline">
+        </div>
+      </div>
+      <div class="form-group" id="blockerGroup">
+        <label><i class="fa-solid fa-triangle-exclamation"></i> Lý do bị nghẽn (Blocker Reason)</label>
+        <input type="text" id="taskFormBlocker" placeholder="Ví dụ: Đang chờ client ID từ phía khách hàng">
+      </div>
+      <div class="form-group">
+        <label>Mô tả chi tiết</label>
+        <textarea id="taskFormDescription" rows="3" placeholder="Chi tiết yêu cầu kỹ thuật..."></textarea>
+      </div>
+      <div class="form-group">
+        <label>Nhãn (Tags)</label>
+        <input type="text" id="taskFormTags" placeholder="auth, api, database...">
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn-action-danger" id="btnDeleteCurrentTask" onclick="deleteCurrentModalTask(event)" style="display: none; margin-right: auto;">
+          <i class="fa-solid fa-trash-can"></i> Xóa Task Này
+        </button>
+        <button type="button" class="btn-action-outline" id="btnCancelTaskModal">Hủy</button>
+        <button type="submit" class="btn-action-primary">Lưu Công Việc</button>
+      </div>
+    </form>
+  </div>
+</div>

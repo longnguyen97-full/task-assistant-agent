@@ -1,0 +1,117 @@
+<!-- TAB 1: CHAT INTERFACE & QUICK INGEST -->
+<section id="tab-chat" class="tab-content active">
+  <div class="chat-container">
+    <!-- Chat Sidebar (Quick Ingest & Daily Notes) -->
+    <aside class="chat-sidebar">
+      <!-- Input Methods & Overview Block -->
+      <div class="sidebar-block input-guide-block">
+        <div class="sidebar-block-header">
+          <h3><i class="fa-solid fa-shapes text-cyan"></i> Phương Thức Input</h3>
+          <span class="badge-tag blue">AI Agent</span>
+        </div>
+        <p class="sidebar-hint">Dev không cần thao tác phân loại thủ công. Chỉ cần đưa vào 1 trong 3 dạng dữ liệu:</p>
+        <div class="input-types-grid">
+          <div class="input-type-card"><i class="fa-solid fa-file-excel text-green"></i> <span><strong>Tài liệu:</strong> .xlsx, .pdf, .md, .csv</span></div>
+          <div class="input-type-card"><i class="fa-solid fa-image text-purple"></i> <span><strong>Hình ảnh:</strong> Sơ đồ, ảnh chụp màn hình</span></div>
+          <div class="input-type-card"><i class="fa-solid fa-message text-cyan"></i> <span><strong>Văn bản (Text):</strong> Giao việc, note họp</span></div>
+        </div>
+        <p class="sidebar-subhint">👉 AI Agent sẽ tự động trích xuất nội dung, note lại nhật ký, tạo task lên Kanban hoặc tra cứu tài liệu theo yêu cầu của bạn.</p>
+      </div>
+
+      <!-- Quick Stats & Daily Notes Widget -->
+      <div class="sidebar-block flex-grow">
+        <div class="sidebar-block-header">
+          <h3><i class="fa-solid fa-clipboard-list"></i> Tiến Độ Công Việc</h3>
+          <span class="count-pill" id="notesCountPill">0</span>
+        </div>
+        <div class="mini-stats-grid mb-3">
+          <div class="mini-stat-card"><span class="stat-num" id="statTodo">0</span><span class="stat-lbl">TODO</span></div>
+          <div class="mini-stat-card in-progress"><span class="stat-num" id="statInProgress">0</span><span class="stat-lbl">Đang làm</span></div>
+          <div class="mini-stat-card blocked"><span class="stat-num" id="statBlocked">0</span><span class="stat-lbl">Blocker</span></div>
+          <div class="mini-stat-card done"><span class="stat-num" id="statDone">0</span><span class="stat-lbl">Xong</span></div>
+        </div>
+        <div class="daily-notes-list" id="dailyNotesList">
+          <!-- Injected via JS -->
+        </div>
+      </div>
+    </aside>
+
+    <!-- Chat Main Window -->
+    <div class="chat-main">
+      <!-- Messages Stream -->
+      <div class="chat-messages" id="chatMessages">
+        <!-- Welcome Message -->
+        <div class="message-wrapper assistant">
+          <div class="msg-avatar">
+            <i class="fa-solid fa-robot"></i>
+          </div>
+          <div class="msg-bubble">
+            <div class="msg-header">
+              <span class="sender-name">Task Assistant (AI Trợ Lý Developer & Quản Lý Dự Án)</span>
+              <span class="msg-time">Hệ thống sẵn sàng</span>
+            </div>
+            <div class="msg-content markdown-body">
+              <p>👋 Chào bạn! Tôi là trợ lý AI chuyên biệt đồng hành cùng Developer trong tiếp nhận và quản lý công việc:</p>
+              <ul>
+                <li>⚡ <strong>Tiếp nhận Task Teams / Email:</strong> Dán tin nhắn giao việc thô, tôi sẽ tự động bóc tách website/dự án, hạn chót, độ ưu tiên và đưa lên Bảng Kanban.</li>
+                <li>📊 <strong>Xuất Báo Cáo Tháng (.xlsx):</strong> Tự động tích hợp tiến độ và kết xuất file Excel chuẩn biểu mẫu doanh nghiệp chỉ với 1 click.</li>
+                <li>🚀 <strong>Họp Dự Án Mới:</strong> Nhận yêu cầu và tự động sinh Bản Kế Hoạch Thực Hiện WBS 4 pha & Timeline Milestones để nộp sếp/khách hàng.</li>
+                <li>🔄 <strong>Họp Dự Án Đang Chạy:</strong> Ghi nhận Change Requests vào nhật ký thay đổi và <strong>tuyệt đối bảo toàn 100% Timeline gốc</strong>.</li>
+                <li>📚 <strong>Kho Tài Liệu 2 Tầng:</strong> Tra cứu nhanh tài liệu kỹ thuật chung toàn hệ thống và tài liệu riêng theo từng dự án.</li>
+              </ul>
+              <p><em>(Lưu ý: Nghiệp vụ giám sát & vận hành website hiện do hệ thống Agentic AI chuyên biệt của bạn quản lý độc lập).</em></p>
+              <p>Hãy chọn thao tác nhanh bên dưới hoặc chat trực tiếp!</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Suggested Prompt Pills -->
+      <div class="quick-prompts-bar">
+        <button class="prompt-chip" data-prompt="Sếp gửi email: Nhờ kiểm tra và tối ưu trang thanh toán cho dự án SIS trước thứ Sáu tuần này.">
+          <i class="fa-solid fa-bolt-lightning"></i> Dán email giao việc mẫu
+        </button>
+        <button class="prompt-chip" data-prompt="Hôm nay họp dự án mới: Cổng Thông Tin Tuyển Sinh Quốc Tế, yêu cầu làm cổng đăng ký và tích hợp thanh toán, deadline 2026-11-20. Hãy lập kế hoạch 4 pha và timeline nộp sếp.">
+          <i class="fa-solid fa-rocket"></i> Họp dự án mới & Lập timeline
+        </button>
+        <button class="prompt-chip" data-prompt="Họp dự án SIS: Khách hàng yêu cầu đổi cơ chế thanh toán sang cổng VNPay, hãy note lại thay đổi và giữ nguyên timeline gốc.">
+          <i class="fa-solid fa-arrows-rotate"></i> Note họp thay đổi dự án
+        </button>
+        <button class="prompt-chip" data-prompt="Tra cứu tài liệu kỹ thuật về quy chuẩn API và bảo mật">
+          <i class="fa-solid fa-magnifying-glass"></i> Tra cứu tài liệu kỹ thuật
+        </button>
+        <button class="prompt-chip" data-prompt="Hãy phân tích nguy cơ trễ hạn (deadline risk) và đánh giá các task blocker hiện tại.">
+          <i class="fa-solid fa-triangle-exclamation"></i> Phân tích rủi ro & Blocker
+        </button>
+      </div>
+
+      <!-- Chat Input Box -->
+      <div class="chat-input-area">
+        <!-- Attachment preview pill if a file/image is selected -->
+        <div id="chatAttachmentPreview" class="attachment-preview-box" style="display: none;">
+          <div class="attachment-pill">
+            <i class="fa-solid fa-paperclip" id="previewFileIcon"></i>
+            <span id="previewFileName">filename.ext</span>
+            <button type="button" class="btn-remove-attachment" id="btnRemoveAttachment" title="Hủy đính kèm"><i class="fa-solid fa-xmark"></i></button>
+          </div>
+        </div>
+
+        <form id="chatForm" class="chat-input-wrapper">
+          <textarea id="chatInput" placeholder="Nhập ghi chú, dán tin nhắn giao việc, nhờ tra tài liệu hoặc đính kèm file/hình ảnh..." rows="1" required></textarea>
+          <div class="input-actions">
+            <div class="input-tools-left">
+              <label for="chatFileInput" class="btn-attach-file" title="Đính kèm tài liệu (.xlsx, .pdf, .md, .csv) hoặc hình ảnh">
+                <i class="fa-solid fa-paperclip"></i>
+              </label>
+              <input type="file" id="chatFileInput" style="display: none;" accept=".md,.txt,.pdf,.xlsx,.xls,.csv,image/*">
+              <span class="input-hint">Enter gửi, Shift+Enter xuống dòng</span>
+            </div>
+            <button type="submit" class="btn-send" id="btnSendMessage" title="Gửi tin nhắn">
+              <i class="fa-solid fa-arrow-up"></i>
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</section>

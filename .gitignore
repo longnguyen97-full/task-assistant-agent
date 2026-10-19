@@ -1,0 +1,109 @@
+# ==========================================
+# Python Artifacts & Bytecode
+# ==========================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# ==========================================
+# Virtual Environments
+# ==========================================
+.venv/
+venv/
+ENV/
+env/
+
+# ==========================================
+# Secrets & Environment Configurations
+# ==========================================
+.env
+.env.*
+!.env.example
+
+# ==========================================
+# SQLite Databases (including WAL & Shared Memory)
+# ==========================================
+*.db
+*.db-wal
+*.db-shm
+*.db-journal
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+*.sqlite3
+*.sqlite3-wal
+*.sqlite3-shm
+data/*.db
+data/*.sqlite3
+
+# ==========================================
+# ChromaDB & Vector Stores
+# ==========================================
+.chroma/
+chroma/
+chroma_db/
+data/chroma/
+data/chroma_db/
+**/chroma/
+**/chroma_db/
+
+# ==========================================
+# Temporary Files & Office/Excel Locks
+# ==========================================
+~$*.xlsx
+~$*.xls
+~$*.csv
+~$*.docx
+*.tmp
+*.temp
+
+# ==========================================
+# Logs & Process Outputs
+# ==========================================
+*.log
+logs/
+
+# ==========================================
+# Testing & Code Quality Caches
+# ==========================================
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# ==========================================
+# IDEs & Code Editors
+# ==========================================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+*.sublime-project
+*.sublime-workspace
+
+# ==========================================
+# OS Generated Files
+# ==========================================
+.DS_Store
+Thumbs.db
+ehthumbs.db
+[Dd]esktop.ini

@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Task Assistant - AI Trợ Lý Developer & Quản Lý Dự Án</title>
+  <meta name="description"
+    content="Trợ lý AI chuyên biệt cho Developer: Tiếp nhận task qua Teams/Email, xuất báo cáo tháng Excel, lập kế hoạch dự án WBS 4 pha & bảo toàn timeline cho dự án đang chạy.">
+
+  <!-- Google Fonts: Inter & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap"
+    rel="stylesheet">
+
+  <!-- Font Awesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
+  <!-- Marked.js for Markdown Rendering -->
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+  <!-- Custom CSS -->
+  <link rel="stylesheet" href="/static/styles.css?v={{ v }}">
+</head>
+
+<body class="dark-theme">
+  <!-- Background Glow & Grid -->
+  <div class="bg-gradient-glow top-left"></div>
+  <div class="bg-gradient-glow bottom-right"></div>
+  <div class="bg-grid-overlay"></div>
+
+  <div id="app" class="app-layout">
+    <!-- Top Navigation Header -->
+    <header class="app-header">
+      <div class="header-left">
+        <div class="brand-logo">
+          <div class="logo-icon-box">
+            <i class="fa-solid fa-robot"></i>
+            <span class="pulse-dot"></span>
+          </div>
+          <div class="brand-text">
+            <span class="brand-title">Task Assistant <span class="badge-tag">AI Dev</span></span>
+            <span class="brand-subtitle">Smart Developer Operations & Planning</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="header-center">
+        <nav class="nav-tabs" id="mainNavTabs">
+          <button class="nav-tab active" data-tab="tab-chat" id="btnTabChat">
+            <i class="fa-solid fa-comments"></i> <span>Chat & Tiếp Nhận</span>
+          </button>
+          <button class="nav-tab" data-tab="tab-kanban" id="btnTabKanban">
+            <i class="fa-solid fa-layer-group"></i> <span>Bảng Tasks & Báo Cáo</span>
+            <span class="tab-badge" id="kanbanTotalBadge">0</span>
+          </button>
+          <button class="nav-tab" data-tab="tab-projects" id="btnTabProjects">
+            <i class="fa-solid fa-diagram-project"></i> <span>Dự Án & Timeline</span>
+          </button>
+          <button class="nav-tab" data-tab="tab-rag" id="btnTabRag">
+            <i class="fa-solid fa-book-bookmark"></i> <span>Kho Tài Liệu</span>
+          </button>
+        </nav>
+      </div>
+
+      <div class="header-right">
+        <div class="api-key-indicator" id="apiKeyStatusBadge" title="Bấm để cấu hình Gemini API Key">
+          <span class="status-dot warning"></span>
+          <span class="indicator-text" id="apiKeyStatusText">Đang kiểm tra...</span>
+        </div>
+
+        <button class="btn-icon" id="btnOpenSettings" title="Cài đặt hệ thống & API Key">
+          <i class="fa-solid fa-gear"></i>
+        </button>
+      </div>
+    </header>
+
+    <!-- Main Content Area -->
+    <main class="app-main">
+      {% include 'tabs/chat.html' %}
+      {% include 'tabs/kanban.html' %}
+      {% include 'tabs/projects.html' %}
+      {% include 'tabs/rag.html' %}
+    </main>
+  </div>
+
+  <!-- Modals -->
+  {% include 'modals/task_modal.html' %}
+  {% include 'modals/settings_modal.html' %}
+  {% include 'modals/confirm_modal.html' %}
+
+  <!-- Toast Notification Container -->
+  <div id="toastContainer" class="toast-container"></div>
+
+  <!-- Custom App JS (Modular Architecture < 500 lines per file) -->
+  <script src="/static/js/core.js?v={{ v }}"></script>
+  <script src="/static/js/chat.js?v={{ v }}"></script>
+  <script src="/static/js/kanban.js?v={{ v }}"></script>
+  <script src="/static/js/projects.js?v={{ v }}"></script>
+  <script src="/static/js/rag.js?v={{ v }}"></script>
+  <script src="/static/js/app.js?v={{ v }}"></script>
+</body>
+
+</html>
