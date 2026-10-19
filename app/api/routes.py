@@ -303,6 +303,9 @@ async def get_settings_endpoint():
     smtp_pass_masked = "****" if settings.SMTP_PASSWORD else ""
 
     return {
+        "llm_provider": getattr(settings, "LLM_PROVIDER", "ollama"),
+        "ollama_base_url": getattr(settings, "OLLAMA_BASE_URL", "http://localhost:11434"),
+        "ollama_model": getattr(settings, "OLLAMA_MODEL", "qwen2.5:7b"),
         "gemini_api_key_set": bool(settings.GEMINI_API_KEY),
         "gemini_api_key_masked": api_key_masked,
         "gemini_model": settings.GEMINI_MODEL,
@@ -320,6 +323,12 @@ async def get_settings_endpoint():
 
 @api_router.post("/settings")
 async def update_settings_endpoint(req: SettingsUpdateRequest):
+    if req.llm_provider is not None:
+        settings.update_setting("LLM_PROVIDER", req.llm_provider.strip().lower())
+    if req.ollama_base_url is not None:
+        settings.update_setting("OLLAMA_BASE_URL", req.ollama_base_url.strip())
+    if req.ollama_model is not None:
+        settings.update_setting("OLLAMA_MODEL", req.ollama_model.strip())
     if req.gemini_api_key is not None and req.gemini_api_key != "":
         settings.update_setting("GEMINI_API_KEY", req.gemini_api_key.strip())
     if req.gemini_model:

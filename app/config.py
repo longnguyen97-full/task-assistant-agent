@@ -17,7 +17,10 @@ class Settings:
     DB_PATH: Path = BASE_DIR / "data" / "task_assistant.db"
     CHROMA_DIR: Path = BASE_DIR / "data" / "chroma_db"
 
-    # AI / LLM Configuration
+    # AI / LLM Configuration (Supports Ollama local Qwen and Google Gemini)
+    LLM_PROVIDER: str = os.getenv("LLM_PROVIDER", "ollama").lower()
+    OLLAMA_BASE_URL: str = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+    OLLAMA_MODEL: str = os.getenv("OLLAMA_MODEL", "qwen2.5:7b")
     GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY") or ""
     GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-flash-latest")
 

@@ -152,6 +152,18 @@ window.appCore = {
 
 
 // Settings & System Config
+function toggleProviderSections(provider) {
+  const ollamaGroup = document.getElementById('ollamaSettingsGroup');
+  const geminiGroup = document.getElementById('geminiSettingsGroup');
+  if (provider === 'gemini') {
+    if (ollamaGroup) ollamaGroup.style.display = 'none';
+    if (geminiGroup) geminiGroup.style.display = 'block';
+  } else {
+    if (ollamaGroup) ollamaGroup.style.display = 'block';
+    if (geminiGroup) geminiGroup.style.display = 'none';
+  }
+}
+
 async function loadSettings() {
   const apiKeyStatusBadge = document.getElementById('apiKeyStatusBadge');
   if (!apiKeyStatusBadge) return;
@@ -161,20 +173,44 @@ async function loadSettings() {
     if (!res.ok) return;
     const data = await res.json();
 
-    if (data.gemini_api_key_set) {
+    const provider = (data.llm_provider || 'ollama').toLowerCase();
+
+    if (provider === 'ollama') {
       apiKeyStatusBadge.innerHTML = `
         <span class="status-dot active"></span>
-        <span class="indicator-text">${data.gemini_model} (Active)</span>
+        <span class="indicator-text">${data.ollama_model || 'qwen2.5:7b'} (Ollama)</span>
       `;
-      const keyInput = document.getElementById('settingGeminiApiKey');
-      if (keyInput) keyInput.placeholder = `Key đang lưu: ${data.gemini_api_key_masked}`;
+    } else if (data.gemini_api_key_set) {
+      apiKeyStatusBadge.innerHTML = `
+        <span class="status-dot active"></span>
+        <span class="indicator-text">${data.gemini_model} (Gemini)</span>
+      `;
     } else {
       apiKeyStatusBadge.innerHTML = `
         <span class="status-dot warning"></span>
         <span class="indicator-text">Nhập Gemini API Key</span>
       `;
-      const keyInput = document.getElementById('settingGeminiApiKey');
-      if (keyInput) keyInput.placeholder = 'Nhập Google Gemini API Key...';
+    }
+
+    const providerSelect = document.getElementById('settingLlmProvider');
+    if (providerSelect) {
+      providerSelect.value = provider;
+      toggleProviderSections(provider);
+    }
+
+    const ollamaModelInput = document.getElementById('settingOllamaModel');
+    if (ollamaModelInput) ollamaModelInput.value = data.ollama_model || 'qwen2.5:7b';
+
+    const ollamaUrlInput = document.getElementById('settingOllamaBaseUrl');
+    if (ollamaUrlInput) ollamaUrlInput.value = data.ollama_base_url || 'http://localhost:11434';
+
+    const keyInput = document.getElementById('settingGeminiApiKey');
+    if (keyInput) {
+      if (data.gemini_api_key_set) {
+        keyInput.placeholder = `Key đang lưu: ${data.gemini_api_key_masked}`;
+      } else {
+        keyInput.placeholder = 'Nhập Google Gemini API Key...';
+      }
     }
 
     const modelSelect = document.getElementById('settingGeminiModel');
@@ -213,6 +249,13 @@ function initSettingsModal() {
   const btnCancelSettingsModal = document.getElementById('btnCancelSettingsModal');
   const settingsForm = document.getElementById('settingsForm');
   const btnToggleApiKeyVis = document.getElementById('btnToggleApiKeyVis');
+  const providerSelect = document.getElementById('settingLlmProvider');
+
+  if (providerSelect) {
+    providerSelect.addEventListener('change', (e) => {
+      toggleProviderSections(e.target.value);
+    });
+  }
 
   if (apiKeyStatusBadge) {
     apiKeyStatusBadge.addEventListener('click', () => {
@@ -241,16 +284,22 @@ function initSettingsModal() {
   if (settingsForm) {
     settingsForm.addEventListener('submit', async (e) => {
       e.preventDefault();
-      const apiKey = document.getElementById('settingGeminiApiKey').value.trim();
-      const model = document.getElementById('settingGeminiModel').value;
-      const smtpHost = document.getElementById('settingSmtpHost').value.trim();
-      const smtpPort = parseInt(document.getElementById('settingSmtpPort').value) || 587;
-      const smtpUser = document.getElementById('settingSmtpUser').value.trim();
-      const smtpPass = document.getElementById('settingSmtpPassword').value;
-      const devEmail = document.getElementById('settingDevEmail').value.trim();
-      const smtpTls = document.getElementById('settingSmtpTls').value === 'true';
+      const provider = document.getElementById('settingLlmProvider')?.value || 'ollama';
+      const ollamaModel = document.getElementById('settingOllamaModel')?.value.trim() || 'qwen2.5:7b';
+      const ollamaBaseUrl = document.getElementById('settingOllamaBaseUrl')?.value.trim() || 'http://localhost:11434';
+      const apiKey = document.getElementById('settingGeminiApiKey')?.value.trim() || '';
+      const model = document.getElementById('settingGeminiModel')?.value || 'gemini-flash-latest';
+      const smtpHost = document.getElementById('settingSmtpHost')?.value.trim() || '';
+      const smtpPort = parseInt(document.getElementById('settingSmtpPort')?.value) || 587;
+      const smtpUser = document.getElementById('settingSmtpUser')?.value.trim() || '';
+      const smtpPass = document.getElementById('settingSmtpPassword')?.value || '';
+      const devEmail = document.getElementById('settingDevEmail')?.value.trim() || '';
+      const smtpTls = document.getElementById('settingSmtpTls')?.value === 'true';
 
       const payload = {
+        llm_provider: provider,
+        ollama_model: ollamaModel,
+        ollama_base_url: ollamaBaseUrl,
         gemini_model: model,
         smtp_host: smtpHost,
         smtp_port: smtpPort,

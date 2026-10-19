@@ -44,6 +44,9 @@ class EmailSendRequest(BaseModel):
     email_type: Optional[str] = "manual"
 
 class SettingsUpdateRequest(BaseModel):
+    llm_provider: Optional[str] = None
+    ollama_base_url: Optional[str] = None
+    ollama_model: Optional[str] = None
     gemini_api_key: Optional[str] = None
     gemini_model: Optional[str] = None
     smtp_host: Optional[str] = None

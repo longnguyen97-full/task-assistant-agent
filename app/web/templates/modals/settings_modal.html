@@ -8,24 +8,51 @@
     <form id="settingsForm" class="modal-form">
       <!-- AI Settings -->
       <div class="settings-section">
-        <h4 class="settings-section-title"><i class="fa-brands fa-google"></i> Mô Hình Trí Tuệ Nhân Tạo (Google Gemini)</h4>
+        <h4 class="settings-section-title"><i class="fa-solid fa-brain"></i> Cấu Hình Trí Tuệ Nhân Tạo (AI / LLM)</h4>
+        
         <div class="form-group">
-          <label>Gemini API Key</label>
-          <div class="input-with-action">
-            <input type="password" id="settingGeminiApiKey" placeholder="Nhập Google Gemini API Key của bạn...">
-            <button type="button" class="btn-toggle-vis" id="btnToggleApiKeyVis"><i class="fa-solid fa-eye"></i></button>
-          </div>
-          <span class="field-hint">Chưa có key? Lấy miễn phí tại <a href="https://aistudio.google.com/" target="_blank" rel="noopener">Google AI Studio</a>.</span>
-        </div>
-        <div class="form-group">
-          <label>Mô hình (Model)</label>
-          <select id="settingGeminiModel">
-            <option value="gemini-flash-latest" selected>Gemini Flash Latest (Khuyến nghị - Nhanh & Mới nhất)</option>
-            <option value="gemini-3.8-flash">Gemini 3.8 Flash (Thông minh & Ổn định)</option>
-            <option value="gemini-3-flash-preview">Gemini 3 Flash Preview</option>
-            <option value="gemini-1.5-pro">Gemini 1.5 Pro (Suy luận sâu)</option>
-            <option value="gemini-1.5-flash">Gemini 1.5 Flash</option>
+          <label>Nhà Cung Cấp Mô Hình (LLM Provider)</label>
+          <select id="settingLlmProvider">
+            <option value="ollama" selected>Ollama (Qwen 2.5 Local - Khuyến nghị / Offline / Không tốn phí)</option>
+            <option value="gemini">Google Gemini (Cloud API)</option>
           </select>
+        </div>
+
+        <!-- Ollama Configuration Section -->
+        <div id="ollamaSettingsGroup">
+          <div class="form-row">
+            <div class="form-group">
+              <label>Mô Hình Ollama (Model)</label>
+              <input type="text" id="settingOllamaModel" placeholder="qwen2.5:7b" value="qwen2.5:7b">
+              <span class="field-hint">Mô hình cục bộ đang hoạt động: <code>qwen2.5:7b</code></span>
+            </div>
+            <div class="form-group">
+              <label>Ollama Base URL</label>
+              <input type="text" id="settingOllamaBaseUrl" placeholder="http://localhost:11434" value="http://localhost:11434">
+            </div>
+          </div>
+        </div>
+
+        <!-- Gemini Configuration Section -->
+        <div id="geminiSettingsGroup" style="display: none;">
+          <div class="form-group">
+            <label>Gemini API Key</label>
+            <div class="input-with-action">
+              <input type="password" id="settingGeminiApiKey" placeholder="Nhập Google Gemini API Key của bạn...">
+              <button type="button" class="btn-toggle-vis" id="btnToggleApiKeyVis"><i class="fa-solid fa-eye"></i></button>
+            </div>
+            <span class="field-hint">Chưa có key? Lấy miễn phí tại <a href="https://aistudio.google.com/" target="_blank" rel="noopener">Google AI Studio</a>.</span>
+          </div>
+          <div class="form-group">
+            <label>Mô hình Gemini (Model)</label>
+            <select id="settingGeminiModel">
+              <option value="gemini-flash-latest" selected>Gemini Flash Latest (Khuyến nghị - Nhanh & Mới nhất)</option>
+              <option value="gemini-3.8-flash">Gemini 3.8 Flash (Thông minh & Ổn định)</option>
+              <option value="gemini-3-flash-preview">Gemini 3 Flash Preview</option>
+              <option value="gemini-1.5-pro">Gemini 1.5 Pro (Suy luận sâu)</option>
+              <option value="gemini-1.5-flash">Gemini 1.5 Flash</option>
+            </select>
+          </div>
         </div>
       </div>
 

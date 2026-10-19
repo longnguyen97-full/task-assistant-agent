@@ -6,10 +6,19 @@ import json
 import re
 from typing import Dict, Any, List, Optional
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage, ToolMessage
-from langchain_google_genai import ChatGoogleGenerativeAI
+
+try:
+    from langchain_ollama import ChatOllama
+except ImportError:
+    ChatOllama = None
+
+try:
+    from langchain_google_genai import ChatGoogleGenerativeAI
+except ImportError:
+    ChatGoogleGenerativeAI = None
 
 from app.config import settings
-from app.agent.prompts import REACT_SYSTEM_PROMPT
+from app.agent.prompts import REACT_SYSTEM_PROMPT, OLLAMA_SYSTEM_PROMPT
 from app.agent.tools import ALL_TOOLS, TOOLS_REGISTRY
 from app.agent.guardrails import check_site_scope
 from app.database import (
@@ -103,6 +112,45 @@ def is_agent_cancelled() -> bool:
     global _agent_cancellation_requested
     return _agent_cancellation_requested
 
+def get_configured_llm():
+    """Tạo instance LLM tương ứng theo cấu hình hệ thống (Ollama Qwen hoặc Google Gemini)."""
+    provider = getattr(settings, "LLM_PROVIDER", "ollama").lower()
+
+    if provider == "ollama" and ChatOllama is not None:
+        try:
+            return ChatOllama(
+                model=getattr(settings, "OLLAMA_MODEL", "qwen2.5:7b"),
+                base_url=getattr(settings, "OLLAMA_BASE_URL", "http://localhost:11434"),
+                temperature=0.2,
+                num_ctx=8192,
+            ), getattr(settings, "OLLAMA_MODEL", "qwen2.5:7b")
+        except Exception as e:
+            print(f"⚠️ Không thể khởi tạo ChatOllama: {e}")
+
+    if provider == "gemini" and settings.GEMINI_API_KEY and ChatGoogleGenerativeAI is not None:
+        try:
+            return ChatGoogleGenerativeAI(
+                model=settings.GEMINI_MODEL,
+                google_api_key=settings.GEMINI_API_KEY,
+                temperature=0.2,
+            ), settings.GEMINI_MODEL
+        except Exception as e:
+            print(f"⚠️ Không thể khởi tạo ChatGoogleGenerativeAI: {e}")
+
+    # Fallback to Ollama if available
+    if ChatOllama is not None:
+        try:
+            return ChatOllama(
+                model=getattr(settings, "OLLAMA_MODEL", "qwen2.5:7b"),
+                base_url=getattr(settings, "OLLAMA_BASE_URL", "http://localhost:11434"),
+                temperature=0.2,
+                num_ctx=8192,
+            ), getattr(settings, "OLLAMA_MODEL", "qwen2.5:7b")
+        except Exception:
+            pass
+
+    return None, None
+
 def execute_react_agent(user_message: str, author: str = "Developer") -> Dict[str, Any]:
     """Single-Agent ReAct Workflow Controller.
     
@@ -111,9 +159,9 @@ def execute_react_agent(user_message: str, author: str = "Developer") -> Dict[st
     2. Kiểm tra Site Scope Guardrail:
        - Chỉ xử lý khi xác định được site thuộc hệ thống hoặc liên quan trực tiếp.
        - Nếu không dính líu gì đến site đang quản lý -> Từ chối xử lý ngoài phạm vi.
-    3. Kiểm tra Gemini API Key:
-       - Có API Key: Chạy vòng lặp ReAct lặp tuần tự (Thought -> Tool Calling -> Observation).
-       - Không có API Key hoặc lỗi quota: Tự động chuyển đổi sang Heuristic Rule-based Engine.
+    3. Kiểm tra LLM Engine (Ollama Qwen hoặc Google Gemini):
+       - Có LLM: Chạy vòng lặp ReAct tuần tự (Thought -> Tool Calling -> Observation).
+       - Không có LLM hoặc lỗi: Tự động chuyển đổi sang Heuristic Rule-based Engine.
     4. Lưu phản hồi và trả về payload có cấu trúc.
     """
     reset_agent_cancellation()
@@ -133,34 +181,36 @@ def execute_react_agent(user_message: str, author: str = "Developer") -> Dict[st
             "model": "site-scope-guardrail"
         }
 
-    api_key = settings.GEMINI_API_KEY
     executed_tool_calls: List[Dict[str, Any]] = []
+
+    provider = getattr(settings, "LLM_PROVIDER", "ollama").lower()
+    base_prompt = OLLAMA_SYSTEM_PROMPT if provider == "ollama" else REACT_SYSTEM_PROMPT
 
     # Dynamic Context: Nạp danh sách site hiện có vào System Prompt
     reg_sites = scope_check.get("registered_sites", [])
     sites_summary = ", ".join(reg_sites)
-    dynamic_system_prompt = REACT_SYSTEM_PROMPT + f"\n\n### 🌐 DANH SÁCH SITE ĐANG QUẢN LÝ:\n{sites_summary}\n"
+    dynamic_system_prompt = base_prompt + f"\n\n### 🌐 DANH SÁCH SITE ĐANG QUẢN LÝ:\n{sites_summary}\n"
     if scope_check.get("matched_site"):
         dynamic_system_prompt += f"-> Site đã xác định cho yêu cầu này: **{scope_check['matched_site']}**\n"
 
-    if api_key:
+    llm, model_name = get_configured_llm()
+    if llm is not None:
         try:
-            llm = ChatGoogleGenerativeAI(
-                model=settings.GEMINI_MODEL,
-                google_api_key=api_key,
-                temperature=0.2
-            )
             llm_with_tools = llm.bind_tools(ALL_TOOLS)
 
-            # Context Engineering: nạp short-term memory từ SQLite
-            history = db_get_chat_history(limit=8)
+            # Context Engineering: nạp short-term memory từ SQLite (rút gọn nếu chạy local LLM)
+            hist_limit = 4 if provider == "ollama" else 8
+            history = db_get_chat_history(limit=hist_limit)
             messages = [SystemMessage(content=dynamic_system_prompt)]
 
             for h in history[:-1]:
+                h_text = h["content"]
+                if provider == "ollama" and len(h_text) > 300:
+                    h_text = h_text[:300] + "..."
                 if h["role"] == "user":
-                    messages.append(HumanMessage(content=h["content"]))
+                    messages.append(HumanMessage(content=h_text))
                 elif h["role"] == "assistant":
-                    messages.append(AIMessage(content=h["content"]))
+                    messages.append(AIMessage(content=h_text))
 
             messages.append(HumanMessage(content=f"Developer ({author}): {user_message}"))
 
@@ -232,11 +282,11 @@ def execute_react_agent(user_message: str, author: str = "Developer") -> Dict[st
                 "role": "assistant",
                 "content": final_text,
                 "tool_calls": executed_tool_calls,
-                "model": settings.GEMINI_MODEL
+                "model": model_name or "llm-agent"
             }
 
         except Exception as e:
-            print(f"⚠️ ReAct Agent Gemini API Warning: {e}, falling back to Heuristic Engine.")
+            print(f"⚠️ ReAct Agent LLM Warning: {e}, falling back to Heuristic Engine.")
 
     # Fallback Controller
     fallback_res = _heuristic_fallback_agent(user_message, author)
@@ -414,7 +464,7 @@ def _heuristic_fallback_agent(user_message: str, author: str) -> Dict[str, Any]:
     if not response_parts:
         response_parts.append("Tôi đã nhận được thông tin từ bạn và ghi nhận vào hệ thống.")
 
-    tip = "\n\n💡 *Gợi ý: Bạn có thể cập nhật `GEMINI_API_KEY` trong mục Cài đặt (⚙️) để kích hoạt toàn bộ khả năng phân tích ngữ nghĩa và suy luận ReAct sâu.*"
+    tip = "\n\n💡 *Gợi ý: Bạn có thể chọn nhà cung cấp LLM (Ollama Qwen hoặc Google Gemini) trong mục Cài đặt (⚙️).*"
     return {
         "role": "assistant",
         "content": "\n\n".join(response_parts) + tip,
