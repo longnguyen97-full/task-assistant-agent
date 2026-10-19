@@ -437,6 +437,29 @@ def execute_react_agent(user_message: str, author: str = "Developer") -> Dict[st
         tool_calls=json.dumps(tool_calls, ensure_ascii=False) if tool_calls else ""
     )
 
+    # Ghi nhận Telemetry log vào cơ sở dữ liệu
+    try:
+        from app.database import db_log_telemetry
+        executed_tool_names = [t.get("name") for t in tool_calls]
+        db_log_telemetry(
+            user_prompt=user_message,
+            model_name=model_name,
+            provider=provider,
+            latency_ms=total_latency_ms,
+            llm_latency_ms=metrics.get("llm_latency_ms", 0.0),
+            tool_latency_ms=metrics.get("tool_latency_ms", 0.0),
+            input_tokens=in_tok,
+            output_tokens=out_tok,
+            total_tokens=in_tok + out_tok,
+            cost_usd=metrics["cost_usd"],
+            tool_calls_count=len(tool_calls),
+            executed_tools=json.dumps(executed_tool_names, ensure_ascii=False),
+            out_of_scope=bool(final_state.get("out_of_scope", False)),
+            fallback_triggered=bool(final_state.get("fallback_triggered", False))
+        )
+    except Exception as e:
+        print(f"[WARN] Error logging agent telemetry: {e}")
+
     response_payload = {
         "role": "assistant",
         "content": content,

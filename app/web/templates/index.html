@@ -62,6 +62,9 @@
           <button class="nav-tab" data-tab="tab-rag" id="btnTabRag">
             <i class="fa-solid fa-book-bookmark"></i> <span>Kho Tài Liệu</span>
           </button>
+          <button class="nav-tab" data-tab="tab-monitoring" id="btnTabMonitoring">
+            <i class="fa-solid fa-chart-line"></i> <span>Monitoring & Evals</span>
+          </button>
         </nav>
       </div>
 
@@ -83,6 +86,7 @@
       {% include 'tabs/kanban.html' %}
       {% include 'tabs/projects.html' %}
       {% include 'tabs/rag.html' %}
+      {% include 'tabs/monitoring.html' %}
     </main>
   </div>
 
@@ -101,6 +105,7 @@
   <script src="/static/js/kanban.js?v={{ v }}"></script>
   <script src="/static/js/projects.js?v={{ v }}"></script>
   <script src="/static/js/rag.js?v={{ v }}"></script>
+  <script src="/static/js/monitoring.js?v={{ v }}"></script>
   <script src="/static/js/app.js?v={{ v }}"></script>
 </body>
 

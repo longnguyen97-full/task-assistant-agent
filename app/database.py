@@ -102,6 +102,25 @@ def init_db():
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS agent_telemetry (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_prompt TEXT NOT NULL,
+        model_name TEXT NOT NULL,
+        provider TEXT NOT NULL,
+        latency_ms REAL NOT NULL,
+        llm_latency_ms REAL DEFAULT 0,
+        tool_latency_ms REAL DEFAULT 0,
+        input_tokens INTEGER DEFAULT 0,
+        output_tokens INTEGER DEFAULT 0,
+        total_tokens INTEGER DEFAULT 0,
+        cost_usd REAL DEFAULT 0.0,
+        tool_calls_count INTEGER DEFAULT 0,
+        executed_tools TEXT DEFAULT '[]',
+        out_of_scope INTEGER DEFAULT 0,
+        fallback_triggered INTEGER DEFAULT 0,
+        created_at TEXT NOT NULL
+    );
     """)
 
     # Safe migration for tasks table (source_type & website_name)
@@ -792,6 +811,107 @@ def db_sync_documents_from_disk():
                             project_name=proj,
                             size_kb=size_kb
                         )
+
+# ==========================================
+# AGENT TELEMETRY & OBSERVABILITY TRACES
+# ==========================================
+
+def db_log_telemetry(
+    user_prompt: str,
+    model_name: str,
+    provider: str,
+    latency_ms: float,
+    llm_latency_ms: float = 0.0,
+    tool_latency_ms: float = 0.0,
+    input_tokens: int = 0,
+    output_tokens: int = 0,
+    total_tokens: int = 0,
+    cost_usd: float = 0.0,
+    tool_calls_count: int = 0,
+    executed_tools: str = "[]",
+    out_of_scope: bool = False,
+    fallback_triggered: bool = False
+) -> int:
+    """Ghi nhận log thực thi một turn của Agent vào SQLite."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    now_str = datetime.now().isoformat()
+    cursor.execute("""
+    INSERT INTO agent_telemetry (
+        user_prompt, model_name, provider, latency_ms, llm_latency_ms, tool_latency_ms,
+        input_tokens, output_tokens, total_tokens, cost_usd, tool_calls_count,
+        executed_tools, out_of_scope, fallback_triggered, created_at
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, (
+        user_prompt, model_name, provider, latency_ms, llm_latency_ms, tool_latency_ms,
+        input_tokens, output_tokens, total_tokens, cost_usd, tool_calls_count,
+        executed_tools, 1 if out_of_scope else 0, 1 if fallback_triggered else 0, now_str
+    ))
+    row_id = cursor.lastrowid
+    conn.commit()
+    conn.close()
+    return row_id
+
+def db_get_telemetry_stats() -> Dict[str, Any]:
+    """Tổng hợp số liệu thống kê Telemetry (KPIs) cho trang Monitoring."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute("""
+    SELECT 
+        COUNT(*) as total_requests,
+        COALESCE(SUM(total_tokens), 0) as total_tokens,
+        COALESCE(SUM(input_tokens), 0) as total_input_tokens,
+        COALESCE(SUM(output_tokens), 0) as total_output_tokens,
+        COALESCE(SUM(cost_usd), 0.0) as total_cost_usd,
+        COALESCE(AVG(latency_ms), 0.0) as avg_latency_ms,
+        COALESCE(AVG(llm_latency_ms), 0.0) as avg_llm_latency_ms,
+        COALESCE(AVG(tool_latency_ms), 0.0) as avg_tool_latency_ms,
+        COALESCE(SUM(out_of_scope), 0) as out_of_scope_count,
+        COALESCE(SUM(fallback_triggered), 0) as fallback_count
+    FROM agent_telemetry
+    """)
+    stats_row = cursor.fetchone()
+    
+    # Task stats
+    cursor.execute("SELECT status, COUNT(*) as cnt FROM tasks GROUP BY status")
+    task_counts = {row["status"]: row["cnt"] for row in cursor.fetchall()}
+    
+    # Project stats
+    cursor.execute("SELECT storage_tier, COUNT(*) as cnt FROM projects GROUP BY storage_tier")
+    tier_counts = {row["storage_tier"]: row["cnt"] for row in cursor.fetchall()}
+
+    conn.close()
+
+    total_req = stats_row["total_requests"] or 0
+    out_of_scope_cnt = stats_row["out_of_scope_count"] or 0
+    guardrail_pass_rate = round(((total_req - out_of_scope_cnt) / total_req * 100), 1) if total_req > 0 else 100.0
+
+    return {
+        "total_requests": total_req,
+        "total_tokens": stats_row["total_tokens"] or 0,
+        "total_input_tokens": stats_row["total_input_tokens"] or 0,
+        "total_output_tokens": stats_row["total_output_tokens"] or 0,
+        "total_cost_usd": round(stats_row["total_cost_usd"] or 0.0, 6),
+        "avg_latency_ms": round(stats_row["avg_latency_ms"] or 0.0, 1),
+        "avg_llm_latency_ms": round(stats_row["avg_llm_latency_ms"] or 0.0, 1),
+        "avg_tool_latency_ms": round(stats_row["avg_tool_latency_ms"] or 0.0, 1),
+        "out_of_scope_count": out_of_scope_cnt,
+        "fallback_count": stats_row["fallback_count"] or 0,
+        "guardrail_pass_rate": guardrail_pass_rate,
+        "tasks_by_status": task_counts,
+        "projects_by_tier": tier_counts
+    }
+
+def db_get_recent_traces(limit: int = 30) -> List[Dict[str, Any]]:
+    """Lấy danh sách các lượt thực thi gần nhất của Agent cho Waterfall Traces."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM agent_telemetry ORDER BY id DESC LIMIT ?", (limit,))
+    rows = [dict(row) for row in cursor.fetchall()]
+    conn.close()
+    return rows
 
 
 

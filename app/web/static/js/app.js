@@ -12,6 +12,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if (window.initChat) window.initChat();
   if (window.initKanban) window.initKanban();
   if (window.initRag) window.initRag();
+  if (window.initMonitoring) window.initMonitoring();
 
   // Initial startup data hydration
   if (window.loadSettings) window.loadSettings();
@@ -20,6 +21,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if (window.loadDailyNotes) window.loadDailyNotes();
   if (window.loadDocs) window.loadDocs();
   if (window.projectsManager && window.projectsManager.loadProjects) window.projectsManager.loadProjects();
+  if (window.loadMonitoring) window.loadMonitoring();
 
   console.log('✓ Task Assistant Agent Frontend Ready.');
 });

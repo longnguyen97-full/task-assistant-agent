@@ -38,7 +38,9 @@ from app.database import (
     db_delete_project,
     db_update_document_scope,
     db_get_registered_sites,
-    db_update_project_storage_tier
+    db_update_project_storage_tier,
+    db_get_telemetry_stats,
+    db_get_recent_traces
 )
 from app.tools.storage_tier_tools import evaluate_project_storage_tiers
 from app.tools.task_parser import parse_teams_or_email_message
@@ -427,5 +429,96 @@ async def delete_project_endpoint(project_id: int, delete_tasks: bool = False):
     if not success:
         raise HTTPException(status_code=404, detail="Không tìm thấy dự án")
     return {"success": True, "message": f"Đã xóa dự án #{project_id} thành công!"}
+
+# --- 10. SYSTEM MONITORING & OBSERVABILITY ENDPOINTS ---
+@api_router.get("/monitoring/stats")
+async def get_monitoring_stats_endpoint():
+    """Lấy dữ liệu thống kê tổng thể cho trang System Monitoring & Observability."""
+    import os
+    import json
+    
+    # 1. Telemetry & Traces
+    telem_stats = db_get_telemetry_stats()
+    recent_traces = db_get_recent_traces(limit=25)
+    
+    # 2. Database file info
+    db_size_kb = 0.0
+    if os.path.exists(settings.DB_PATH):
+        db_size_kb = round(os.path.getsize(settings.DB_PATH) / 1024, 1)
+
+    # 3. Vector Store stats
+    try:
+        rag_info = get_rag_stats()
+        rag_summary = {
+            "total_chunks": rag_info.get("total_chunks", 0),
+            "total_files": len(rag_info.get("files", [])),
+            "status": "Online"
+        }
+    except Exception:
+        rag_summary = {"total_chunks": 0, "total_files": 0, "status": "Offline / Init"}
+
+    # 4. Scheduler stats
+    sched_info = get_scheduler_status()
+
+    # 5. LLM Provider Config
+    llm_info = {
+        "provider": getattr(settings, "LLM_PROVIDER", "ollama"),
+        "ollama_model": getattr(settings, "OLLAMA_MODEL", "qwen2.5:7b"),
+        "ollama_base_url": getattr(settings, "OLLAMA_BASE_URL", "http://localhost:11434"),
+        "gemini_model": settings.GEMINI_MODEL,
+        "gemini_api_key_set": bool(settings.GEMINI_API_KEY)
+    }
+
+    # 6. Latest Eval Report
+    eval_report_file = Path(__file__).resolve().parent.parent.parent / "tests" / "eval_report.json"
+    latest_eval = {}
+    if eval_report_file.exists():
+        try:
+            with open(eval_report_file, "r", encoding="utf-8") as f:
+                latest_eval = json.load(f)
+        except Exception:
+            pass
+
+    return {
+        "telemetry": telem_stats,
+        "recent_traces": recent_traces,
+        "database": {
+            "size_kb": db_size_kb,
+            "journal_mode": "WAL",
+            "busy_timeout_ms": 30000,
+            "status": "Healthy"
+        },
+        "vector_store": rag_summary,
+        "scheduler": sched_info,
+        "llm_config": llm_info,
+        "latest_eval": latest_eval
+    }
+
+@api_router.get("/monitoring/benchmark")
+async def get_latest_benchmark_report_endpoint():
+    """Lấy báo cáo benchmark đánh giá Agent gần nhất."""
+    import json
+    eval_report_file = Path(__file__).resolve().parent.parent.parent / "tests" / "eval_report.json"
+    if not eval_report_file.exists():
+        return {"has_report": False, "message": "Chưa có báo cáo benchmark nào. Hãy bấm 'Chạy Benchmark' để bắt đầu."}
+    try:
+        with open(eval_report_file, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        data["has_report"] = True
+        return data
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Lỗi đọc file eval report: {e}")
+
+@api_router.post("/monitoring/benchmark/run")
+async def run_benchmark_endpoint():
+    """Chạy toàn bộ bộ test Golden Dataset và sinh báo cáo benchmark mới nhất."""
+    try:
+        from tests.run_evaluation import run_agent_benchmarks
+        report = run_agent_benchmarks()
+        report["has_report"] = True
+        return report
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Lỗi khi thực thi benchmark suite: {e}")
+
 
 

@@ -1,0 +1,224 @@
+<!-- TAB 5: SYSTEM OBSERVABILITY & MONITORING -->
+<section id="tab-monitoring" class="tab-content">
+  <div class="monitoring-container">
+    <!-- Header -->
+    <div class="monitoring-header">
+      <div class="monitoring-title-box">
+        <h2><i class="fa-solid fa-chart-line text-cyan"></i> System Observability & Monitoring</h2>
+        <p>Giám sát thời gian thực: Hiệu năng Agent (Latency), Chi phí Token, Sức khỏe hệ thống và Báo cáo Đánh giá (Evals)</p>
+      </div>
+      <div class="monitoring-header-actions">
+        <button type="button" class="btn-action-secondary" id="btnRefreshMonitoring">
+          <i class="fa-solid fa-arrows-rotate"></i> <span>Làm Mới</span>
+        </button>
+        <button type="button" class="btn-action-primary" id="btnTriggerEvalBenchmark">
+          <i class="fa-solid fa-vial-circle-check"></i> <span>Chạy Benchmark Đánh Giá</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- 4 KPI Stat Cards -->
+    <div class="monitoring-kpi-grid">
+      <div class="monitoring-card kpi-card">
+        <div class="kpi-icon-box cyan">
+          <i class="fa-solid fa-bolt"></i>
+        </div>
+        <div class="kpi-content">
+          <span class="kpi-label">Tổng Lượt Xử Lý</span>
+          <span class="kpi-value" id="monTotalRequests">0</span>
+          <span class="kpi-sub" id="monGuardrailRate">Tỷ lệ qua Guardrail: 100%</span>
+        </div>
+      </div>
+
+      <div class="monitoring-card kpi-card">
+        <div class="kpi-icon-box blue">
+          <i class="fa-solid fa-stopwatch"></i>
+        </div>
+        <div class="kpi-content">
+          <span class="kpi-label">Độ Trễ Trung Bình (Latency)</span>
+          <span class="kpi-value" id="monAvgLatency">0.0 ms</span>
+          <span class="kpi-sub" id="monLatencyBreakdown">LLM: 0ms | Tools: 0ms</span>
+        </div>
+      </div>
+
+      <div class="monitoring-card kpi-card">
+        <div class="kpi-icon-box amber">
+          <i class="fa-solid fa-coins"></i>
+        </div>
+        <div class="kpi-content">
+          <span class="kpi-label">Tổng Tokens & Chi Phí</span>
+          <span class="kpi-value" id="monTotalTokens">0 tok</span>
+          <span class="kpi-sub" id="monTotalCost">$0.00000 USD</span>
+        </div>
+      </div>
+
+      <div class="monitoring-card kpi-card">
+        <div class="kpi-icon-box green">
+          <i class="fa-solid fa-heart-pulse"></i>
+        </div>
+        <div class="kpi-content">
+          <span class="kpi-label">Sức Khỏe Hệ Thống</span>
+          <span class="kpi-value" id="monSystemHealth">Online</span>
+          <span class="kpi-sub" id="monActiveProvider">Ollama (Qwen 2.5)</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Middle Grid: Subsystem Health vs Benchmark Report -->
+    <div class="monitoring-middle-grid">
+      <!-- Left: Architecture & Subsystems Status -->
+      <div class="monitoring-card subsystem-card">
+        <div class="card-header-row">
+          <h3><i class="fa-solid fa-server text-cyan"></i> Trạng Thái Các Phân Hệ</h3>
+          <span class="badge-tag cyan"><i class="fa-solid fa-circle-check"></i> Hoạt Động</span>
+        </div>
+        <div class="subsystems-list">
+          <div class="subsystem-item">
+            <div class="subsystem-icon"><i class="fa-solid fa-brain text-purple"></i></div>
+            <div class="subsystem-details">
+              <div class="subsystem-name-row">
+                <strong>LLM Inference Engine</strong>
+                <span class="badge-status online" id="monLlmStatus">Active</span>
+              </div>
+              <p class="subsystem-desc" id="monLlmDesc">Provider: Ollama | Model: qwen2.5:7b</p>
+            </div>
+          </div>
+
+          <div class="subsystem-item">
+            <div class="subsystem-icon"><i class="fa-solid fa-database text-blue"></i></div>
+            <div class="subsystem-details">
+              <div class="subsystem-name-row">
+                <strong>Relational Database (SQLite WAL)</strong>
+                <span class="badge-status online" id="monDbStatus">Healthy</span>
+              </div>
+              <p class="subsystem-desc" id="monDbDesc">Dung lượng: 0 KB | Chế độ: WAL Concurrency Safe</p>
+            </div>
+          </div>
+
+          <div class="subsystem-item">
+            <div class="subsystem-icon"><i class="fa-solid fa-book-bookmark text-amber"></i></div>
+            <div class="subsystem-details">
+              <div class="subsystem-name-row">
+                <strong>Vector Store (ChromaDB)</strong>
+                <span class="badge-status online" id="monRagStatus">Indexed</span>
+              </div>
+              <p class="subsystem-desc" id="monRagDesc">0 tài liệu | 0 chunks vector</p>
+            </div>
+          </div>
+
+          <div class="subsystem-item">
+            <div class="subsystem-icon"><i class="fa-solid fa-clock-rotate-left text-green"></i></div>
+            <div class="subsystem-details">
+              <div class="subsystem-name-row">
+                <strong>Background Cron Scheduler</strong>
+                <span class="badge-status online" id="monSchedulerStatus">Running</span>
+              </div>
+              <p class="subsystem-desc" id="monSchedulerDesc">Quét quá hạn & blocker lúc 9:00 AM</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Task & Tier Distribution Mini-Bar -->
+        <div class="distribution-box">
+          <div class="dist-header">
+            <span>Phân bố Tasks & Storage:</span>
+            <span id="monTaskDistSummary">0 Tasks</span>
+          </div>
+          <div class="dist-tags-row" id="monDistPills">
+            <span class="dist-pill todo">TODO: 0</span>
+            <span class="dist-pill in-prog">IN PROGRESS: 0</span>
+            <span class="dist-pill blocked">BLOCKED: 0</span>
+            <span class="dist-pill done">DONE: 0</span>
+            <span class="dist-pill hot">🔥 Hot: 0</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right: Automated Quality Benchmark (Golden Dataset) -->
+      <div class="monitoring-card benchmark-card">
+        <div class="card-header-row">
+          <div>
+            <h3><i class="fa-solid fa-vial-circle-check text-green"></i> Đánh Giá Chất Lượng Agent (Evals)</h3>
+            <span class="card-sub-info" id="monBenchmarkTimestamp">Bộ dữ liệu Golden Dataset (10 Test Cases)</span>
+          </div>
+          <span class="badge-pass-pill" id="monBenchmarkBadge">100% PASS</span>
+        </div>
+
+        <div class="benchmark-stats-row">
+          <div class="bm-stat-box">
+            <span class="bm-stat-num text-green" id="monBmPassRate">100%</span>
+            <span class="bm-stat-lbl">Tỷ lệ Đạt (Pass Rate)</span>
+          </div>
+          <div class="bm-stat-box">
+            <span class="bm-stat-num text-cyan" id="monBmGuardrailAcc">100%</span>
+            <span class="bm-stat-lbl">Guardrail Accuracy</span>
+          </div>
+          <div class="bm-stat-box">
+            <span class="bm-stat-num text-purple" id="monBmToolAcc">100%</span>
+            <span class="bm-stat-lbl">Tool Calling Accuracy</span>
+          </div>
+          <div class="bm-stat-box">
+            <span class="bm-stat-num text-amber" id="monBmAvgLat">3.2s</span>
+            <span class="bm-stat-lbl">Độ Trễ Test TB</span>
+          </div>
+        </div>
+
+        <!-- Mini table of benchmark test cases -->
+        <div class="benchmark-table-wrapper">
+          <table class="benchmark-table">
+            <thead>
+              <tr>
+                <th>Test ID</th>
+                <th>Phân Loại</th>
+                <th>Mô Tả Kịch Bản</th>
+                <th>Kết Quả</th>
+                <th>Latency</th>
+              </tr>
+            </thead>
+            <tbody id="monBenchmarkTableBody">
+              <tr>
+                <td colspan="5" class="empty-cell">Đang tải dữ liệu benchmark...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bottom: Live Execution Traces (Waterfall Observability Log) -->
+    <div class="monitoring-card traces-card">
+      <div class="card-header-row">
+        <div>
+          <h3><i class="fa-solid fa-timeline text-cyan"></i> Nhật Ký Thực Thi Trực Tiếp (Execution Traces)</h3>
+          <span class="card-sub-info">Chi tiết từng lượt tương tác: Prompt, Model, Latency, Token Usage, Tool Calling & Cost</span>
+        </div>
+        <div class="traces-actions">
+          <span class="traces-count-badge" id="monTracesCountBadge">0 traces</span>
+        </div>
+      </div>
+
+      <div class="traces-table-wrapper">
+        <table class="traces-table">
+          <thead>
+            <tr>
+              <th style="width: 50px;">#</th>
+              <th style="width: 140px;">Thời Gian</th>
+              <th>Prompt Người Dùng</th>
+              <th style="width: 130px;">Model</th>
+              <th style="width: 110px;">Latency</th>
+              <th style="width: 100px;">Tokens</th>
+              <th style="width: 100px;">Chi Phí</th>
+              <th>Tools Đã Gọi</th>
+              <th style="width: 100px;">Trạng Thái</th>
+            </tr>
+          </thead>
+          <tbody id="monTracesTableBody">
+            <tr>
+              <td colspan="9" class="empty-cell">Chưa có lượt thực thi nào được ghi nhận. Hãy gửi tin nhắn qua tab Chat để tạo trace đầu tiên!</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</section>

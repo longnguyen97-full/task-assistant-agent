@@ -141,6 +141,7 @@ function initNavigation() {
       if (targetTab === 'tab-kanban' && window.loadTasks) window.loadTasks();
       if (targetTab === 'tab-projects' && window.projectsManager) window.projectsManager.loadProjects();
       if (targetTab === 'tab-rag' && window.loadDocs) window.loadDocs();
+      if (targetTab === 'tab-monitoring' && window.loadMonitoring) window.loadMonitoring();
     });
   });
 }

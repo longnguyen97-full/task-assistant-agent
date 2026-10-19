@@ -119,6 +119,7 @@ Agent hoạt động theo mô hình **ReAct (Reasoning + Acting)** lặp tuần 
 | **🔥/❄️ Quản Lý Phân Vùng Dự Án (Hot & Cold)** | Lọc và quản lý dự án theo vùng hoạt động (Hot) và vùng lưu trữ (Cold); tích hợp AI Storage Advisor phân tích khuyến nghị tối ưu hiển thị. | Giữ giao diện làm việc luôn tinh gọn, tập trung vào các sprint nóng. |
 | **📚 Kho Tri Thức RAG Đa Phạm Vi** | Quản lý tập trung tài liệu dự án và tài liệu dùng chung; tải lên, gán phạm vi (General / Project), xóa và tra cứu ngữ nghĩa tức thì qua vector search ChromaDB. | Agent nắm rõ specs chi tiết, trả lời câu hỏi nghiệp vụ chuẩn xác. |
 | **📊 Business Report Engine** | Xuất báo cáo tổng kết tháng tự động ra định dạng Excel (`.xlsx`) chuẩn hóa KPI, danh mục công việc hoàn thành và Change Requests chỉ với 1 click. | Đến kỳ báo cáo chỉ cần bấm 1 nút là có file nộp sếp. |
+| **📈 System Observability & Monitoring** | Giám sát thời gian thực: Hiệu năng Agent (Latency), Chi phí Token, Sức khỏe hệ thống và Báo cáo Đánh giá (Evals Benchmark). | Đo lường chi tiết chi phí vận hành, độ trễ từng bước và độ chính xác của Agent. |
 
 ---
 
@@ -279,6 +280,9 @@ uv run python main.py
 | `GET` | `/api/tasks/export-monthly-report` | Tải về file Excel (.xlsx) báo cáo KPI và công việc tháng tự động |
 | `GET` | `/api/settings` | Lấy cấu hình runtime hiện tại của hệ thống |
 | `POST` | `/api/settings` | Lưu cập nhật cấu hình LLM provider, API key, model và SMTP |
+| `GET` | `/api/monitoring/stats` | Lấy dữ liệu KPI đo lường hiệu năng, chi phí, tài nguyên và traces |
+| `GET` | `/api/monitoring/benchmark` | Lấy báo cáo benchmark đánh giá Agent gần nhất |
+| `POST` | `/api/monitoring/benchmark/run` | Kích hoạt chạy toàn bộ bộ test Golden Dataset và sinh báo cáo mới |
 
 ---
 
@@ -292,6 +296,9 @@ uv run python -c "
 import main, app.database, app.config, app.agent.graph, app.api.routes, app.reports.monthly_report
 print('✅ Tất cả modules import thành công và sẵn sàng phục vụ!')
 "
+
+# Chạy bộ đánh giá Benchmark tự động (Golden Dataset Evals)
+uv run python tests/run_evaluation.py
 ```
 
 ---
@@ -300,7 +307,7 @@ print('✅ Tất cả modules import thành công và sẵn sàng phục vụ!')
 
 * [ ] **Multi-Agent Collaboration:** Nâng cấp từ Single-Agent sang mạng lưới Multi-Agent (Supervisor, Planning Agent, Coding Agent, Reviewer Agent) bằng LangGraph.
 * [ ] **Model Context Protocol (MCP):** Chuẩn hóa việc tích hợp công cụ thông qua giao thức MCP để kết nối an toàn với các hệ thống Git, Jira, Notion của doanh nghiệp.
-* [ ] **LLM Observability & Evaluation:** Tích hợp Langfuse / OpenTelemetry để theo dõi độ trễ (latency), chi phí token (cost) và đánh giá độ chuẩn xác của Tool Calling (LLM-as-a-Judge).
+* [x] **LLM Observability & Evaluation:** Theo dõi thời gian thực độ trễ (latency), chi phí token (cost), nhật ký Waterfall Traces và bộ kiểm thử tự động Benchmark Golden Dataset (100% pass rate).
 * [ ] **Enterprise Vector & Data Store:** Hỗ trợ kết nối Qdrant / pgvector và PostgreSQL cho các môi trường triển khai quy mô lớn phân tán.
 
 ---
