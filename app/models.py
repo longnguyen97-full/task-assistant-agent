@@ -70,6 +70,7 @@ class NewProjectPlanRequest(BaseModel):
     project_name: str = Field(..., description="Tên dự án mới")
     requirements: str = Field(..., description="Nội dung yêu cầu hoặc note cuộc họp")
     target_deadline: Optional[str] = Field("", description="Hạn bàn giao mong muốn")
+    storage_tier: Optional[str] = Field("HOT", description="Phân vùng lưu trữ: HOT hoặc COLD")
 
 class ChangeNoteCreateRequest(BaseModel):
     project_id: Optional[int] = None
@@ -77,3 +78,13 @@ class ChangeNoteCreateRequest(BaseModel):
     title: str = Field(..., description="Tóm tắt nội dung thay đổi")
     content: str = Field(..., description="Chi tiết các ý thay đổi theo cuộc họp")
     author: Optional[str] = "Developer"
+
+class DocumentScopeUpdateRequest(BaseModel):
+    filename: str = Field(..., description="Tên file tài liệu cần chuyển phạm vi")
+    scope_type: str = Field("GENERAL", description="Phạm vi: GENERAL (Kỹ thuật chung) hoặc PROJECT (Dự án riêng)")
+    project_name: Optional[str] = Field("", description="Tên dự án nếu scope_type là PROJECT")
+
+class ProjectStorageTierUpdateRequest(BaseModel):
+    storage_tier: str = Field(..., description="HOT hoặc COLD")
+
+

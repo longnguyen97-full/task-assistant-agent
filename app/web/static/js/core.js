@@ -10,6 +10,17 @@ window.TaskAssistant = window.TaskAssistant || {
   isSendingMessage: false
 };
 
+// Global Date Picker Handler: Clicking anywhere on any date input opens the calendar picker
+document.addEventListener('click', (e) => {
+  const target = e.target;
+  if (target && (target.type === 'date' || target.matches?.('input[type="date"]'))) {
+    try {
+      target.showPicker();
+    } catch (err) {}
+  }
+});
+
+
 // Utility: Toast Notification
 function showToast(message, type = 'info') {
   const container = document.getElementById('toastContainer');
@@ -271,3 +282,28 @@ function initSettingsModal() {
   }
 }
 window.initSettingsModal = initSettingsModal;
+
+// Global Project Storage Tier Helper
+window.switchProjectTier = async function (projectId, targetTier) {
+  try {
+    const tierLabel = targetTier === 'HOT' ? 'Hot Storage 🔥' : 'Cold Storage ❄️';
+    window.showToast?.(`Đang chuyển dự án sang ${tierLabel}...`, 'info');
+    const res = await fetch(`/api/projects/${projectId}/storage-tier`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ storage_tier: targetTier })
+    });
+    const data = await res.json();
+    if (res.ok && data.success) {
+      window.showToast?.(data.message, 'success');
+      if (window.projectsManager && window.projectsManager.loadProjects) {
+        window.projectsManager.loadProjects();
+      }
+    } else {
+      window.showToast?.(data.detail || 'Lỗi khi cập nhật vùng lưu trữ', 'error');
+    }
+  } catch (err) {
+    console.error(err);
+    window.showToast?.('Lỗi kết nối khi chuyển vùng dự án', 'error');
+  }
+};

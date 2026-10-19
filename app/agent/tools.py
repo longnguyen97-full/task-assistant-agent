@@ -12,7 +12,9 @@ from app.database import (
     db_create_task,
     db_update_task,
     db_add_daily_note,
-    db_get_daily_notes
+    db_get_daily_notes,
+    db_delete_project,
+    db_delete_project_by_name
 )
 from app.rag.vector_store import query_rag
 from app.tools.planning_tools import (
@@ -23,6 +25,7 @@ from app.tools.planning_tools import (
 from app.tools.task_parser import parse_teams_or_email_message
 from app.tools.email_tools import tool_dispatch_email
 from app.tools.excel_tools import tool_import_tasks_from_excel
+from app.tools.storage_tier_tools import evaluate_project_storage_tiers, tool_set_project_storage_tier
 
 # -------------------------------------------------------------
 # 1. TASK EXTRACTOR & STATE MANAGEMENT TOOLS
@@ -40,7 +43,8 @@ def create_task(
     source_type: str = "MANUAL",
     website_name: str = ""
 ) -> str:
-    """Tạo mới một công việc (task) vào cơ sở dữ liệu SQLite và đưa lên bảng Kanban."""
+    """Tạo mới một công việc (task) vào cơ sở dữ liệu SQLite và đưa lên bảng Kanban.
+    DÙNG CHO: Mọi công việc cụ thể, giao việc, clone website sang site mới, sửa lỗi, cắt gọt nội dung, tối ưu web (kể cả khi dev nhắn dạng 'project X, deadline Y, nội dung: Z')."""
     try:
         t = db_create_task(
             title=title,
@@ -120,7 +124,8 @@ def ingest_task_from_message(raw_text: str, source: str = "TEAMS") -> str:
 # -------------------------------------------------------------
 @tool
 def plan_wbs(project_name: str, requirements: str, target_deadline: str = "") -> str:
-    """Lập Kế hoạch Thực hiện (WBS 4 giai đoạn: Specs, Backend, Frontend, UAT/Deploy) và Bảng Timeline cho Dự án Mới để nộp sếp/khách hàng."""
+    """Lập Kế hoạch Thực hiện (WBS) và Bảng Timeline cho Dự án Mới để nộp sếp/khách hàng.
+    CHỈ DÙNG KHI: Dev yêu cầu rõ ràng việc lập kế hoạch/timeline dự án tổng thể (ví dụ: 'họp dự án mới', 'lập kế hoạch WBS'). KHÔNG DÙNG cho các công việc cụ thể (như clone web, sửa lỗi, cắt gọt nội dung) - đối với công việc cụ thể hãy dùng `create_task`."""
     try:
         res = generate_new_project_plan_and_timeline(
             project_name=project_name,
@@ -220,6 +225,53 @@ def import_tasks_from_excel_tool(file_name_or_path: str) -> str:
     except Exception as e:
         return json.dumps({"status": "error", "message": str(e)}, ensure_ascii=False)
 
+@tool
+def delete_project_tool(project_name_or_id: str, delete_tasks: bool = False) -> str:
+    """Xóa một dự án khỏi hệ thống.
+    Tham số:
+    - project_name_or_id: Tên dự án hoặc ID dự án cần xóa.
+    - delete_tasks: True nếu muốn xóa toàn bộ tasks thuộc dự án, False nếu giữ lại tasks."""
+    try:
+        if str(project_name_or_id).isdigit():
+            success = db_delete_project(int(project_name_or_id), delete_tasks=delete_tasks)
+        else:
+            success = db_delete_project_by_name(project_name_or_id, delete_tasks=delete_tasks)
+        if success:
+            return json.dumps({
+                "status": "success",
+                "message": f"Đã xóa thành công dự án '{project_name_or_id}' khỏi hệ thống."
+            }, ensure_ascii=False)
+        else:
+            return json.dumps({
+                "status": "error",
+                "message": f"Không tìm thấy dự án '{project_name_or_id}' để xóa."
+            }, ensure_ascii=False)
+    except Exception as e:
+        return json.dumps({"status": "error", "message": str(e)}, ensure_ascii=False)
+
+@tool
+def evaluate_project_storage_tiers_tool() -> str:
+    """Đánh giá, phân tích hoạt động của các dự án (qua số task đang chạy, độ ưu tiên, hạn chót và trao đổi trong chat) để ĐỀ XUẤT chuyển vùng Hot/Cold Storage.
+    QUAN TRỌNG: Tool này CHỈ ĐƯA RA ĐỀ XUẤT và phân tích lý do, TUYỆT ĐỐI KHÔNG tự động chuyển tier của dự án mà không có sự xác nhận của developer."""
+    try:
+        res = evaluate_project_storage_tiers()
+        return json.dumps(res, ensure_ascii=False)
+    except Exception as e:
+        return json.dumps({"status": "error", "message": str(e)}, ensure_ascii=False)
+
+@tool
+def set_project_storage_tier_tool(project_name_or_id: str, storage_tier: str) -> str:
+    """Chuyển đổi phân vùng lưu trữ cho một dự án sang HOT hoặc COLD.
+    CHỈ GỌI KHI: Developer có yêu cầu hoặc xác nhận rõ ràng (ví dụ: 'chuyển dự án X sang Cold', 'đồng ý đưa Y lên Hot').
+    Tham số:
+    - project_name_or_id: Tên dự án hoặc ID dự án cần chuyển.
+    - storage_tier: 'HOT' hoặc 'COLD'."""
+    try:
+        res = tool_set_project_storage_tier(project_name_or_id=project_name_or_id, storage_tier=storage_tier)
+        return json.dumps(res, ensure_ascii=False)
+    except Exception as e:
+        return json.dumps({"status": "error", "message": str(e)}, ensure_ascii=False)
+
 # Tool Registry for ReAct Agent
 TOOLS_REGISTRY = {
     "create_task": create_task,
@@ -228,7 +280,10 @@ TOOLS_REGISTRY = {
     "ingest_task_from_message": ingest_task_from_message,
     "plan_wbs": plan_wbs,
     "log_change_request": log_change_request,
+    "delete_project": delete_project_tool,
     "analyze_project_plan_and_risks": analyze_project_plan_and_risks_tool,
+    "evaluate_project_storage_tiers": evaluate_project_storage_tiers_tool,
+    "set_project_storage_tier": set_project_storage_tier_tool,
     "query_docs": query_docs,
     "export_monthly_report": export_monthly_report,
     "record_daily_note": record_daily_note,
@@ -237,3 +292,4 @@ TOOLS_REGISTRY = {
 }
 
 ALL_TOOLS = list(TOOLS_REGISTRY.values())
+

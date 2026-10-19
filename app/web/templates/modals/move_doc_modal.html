@@ -1,0 +1,57 @@
+<!-- Modal: Chuyển Phạm Vi Tài Liệu (Dự Án Chung / Riêng) -->
+<div class="modal-overlay" id="moveDocModal">
+  <div class="modal-card" style="max-width: 500px;">
+    <div class="modal-header">
+      <h3 style="color: var(--accent-cyan); font-size: 1.1rem; display: flex; align-items: center; gap: 8px;">
+        <i class="fa-solid fa-arrow-right-arrow-left"></i> <span>Chuyển Phạm Vi Tài Liệu</span>
+      </h3>
+      <button type="button" class="btn-modal-close" id="btnCloseMoveDocModal" title="Đóng"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal-form" style="padding: 20px; gap: 1.25rem;">
+      <div class="form-group">
+        <label><i class="fa-regular fa-file"></i> Tài Liệu Đang Chọn:</label>
+        <div id="moveDocTargetName" style="background: rgba(255, 255, 255, 0.05); padding: 8px 12px; border-radius: 6px; font-family: var(--font-mono); font-size: 0.85rem; color: var(--accent-cyan); word-break: break-all;">
+          filename.pdf
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label><i class="fa-solid fa-layer-group"></i> Chọn Phạm Vi Mới:</label>
+        <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 6px;">
+          <label class="scope-choice-card" style="display: flex; align-items: flex-start; gap: 10px; padding: 10px 14px; border: 1px solid var(--border-subtle); border-radius: 8px; cursor: pointer; background: rgba(255, 255, 255, 0.02);">
+            <input type="radio" name="targetDocScope" value="GENERAL" id="scopeRadioGeneral" checked style="margin-top: 3px;">
+            <div>
+              <strong style="color: var(--status-done); font-size: 0.88rem;"><i class="fa-solid fa-globe"></i> 🌐 Dự Án Chung (Kỹ thuật chung toàn hệ thống)</strong>
+              <p style="font-size: 0.75rem; color: var(--text-dim); margin-top: 2px;">Tài liệu áp dụng cho mọi dự án, coding convention, specs nền tảng dùng chung.</p>
+            </div>
+          </label>
+
+          <label class="scope-choice-card" style="display: flex; align-items: flex-start; gap: 10px; padding: 10px 14px; border: 1px solid var(--border-subtle); border-radius: 8px; cursor: pointer; background: rgba(255, 255, 255, 0.02);">
+            <input type="radio" name="targetDocScope" value="PROJECT" id="scopeRadioProject" style="margin-top: 3px;">
+            <div style="flex: 1;">
+              <strong style="color: var(--accent-blue); font-size: 0.88rem;"><i class="fa-solid fa-folder-closed"></i> 📁 Dự Án Riêng / Website Cụ Thể</strong>
+              <p style="font-size: 0.75rem; color: var(--text-dim); margin-top: 2px;">Tài liệu đặc thù cho một website hoặc dự án (Timeline, báo cáo, đặc tả riêng).</p>
+            </div>
+          </label>
+        </div>
+      </div>
+
+      <div class="form-group" id="moveDocProjectGroup" style="display: none;">
+        <label for="moveDocProjectSelect"><i class="fa-solid fa-diagram-project"></i> Chỉ Định Dự Án / Website:</label>
+        <select id="moveDocProjectSelect" style="width: 100%; background: var(--bg-glass-input); color: var(--text-main); border: 1px solid var(--border-subtle); border-radius: 8px; padding: 8px 12px; font-size: 0.88rem;">
+          <option value="">-- Đang tải danh sách dự án... --</option>
+        </select>
+        <div style="margin-top: 6px;">
+          <input type="text" id="moveDocCustomProject" placeholder="Hoặc nhập tên dự án/site mới nếu chưa có trong danh sách..." style="width: 100%; background: var(--bg-glass-input); color: var(--text-main); border: 1px solid var(--border-subtle); border-radius: 8px; padding: 6px 12px; font-size: 0.82rem;">
+        </div>
+      </div>
+
+      <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 10px;">
+        <button type="button" class="btn-action-outline" id="btnCancelMoveDocModal">Hủy</button>
+        <button type="button" class="btn-action-primary" id="btnSaveMoveDocScope">
+          <i class="fa-solid fa-check"></i> <span>Lưu Thay Đổi</span>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>

@@ -38,7 +38,7 @@
         </div>
         <div class="form-group">
           <label>Hạn chót (Deadline)</label>
-          <input type="date" id="taskFormDeadline">
+          <input type="date" id="taskFormDeadline" onclick="try{this.showPicker()}catch(e){}">
         </div>
       </div>
       <div class="form-group" id="blockerGroup">
@@ -56,6 +56,9 @@
       <div class="modal-footer">
         <button type="button" class="btn-action-danger" id="btnDeleteCurrentTask" onclick="deleteCurrentModalTask(event)" style="display: none; margin-right: auto;">
           <i class="fa-solid fa-trash-can"></i> Xóa Task Này
+        </button>
+        <button type="button" class="btn-action-outline" id="btnDuplicateCurrentTask" onclick="duplicateCurrentModalTask(event)" style="display: none; margin-right: 8px;">
+          <i class="fa-regular fa-copy"></i> Nhân Bản Task
         </button>
         <button type="button" class="btn-action-outline" id="btnCancelTaskModal">Hủy</button>
         <button type="submit" class="btn-action-primary">Lưu Công Việc</button>

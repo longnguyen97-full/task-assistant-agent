@@ -90,11 +90,26 @@ function createKanbanCardElement(task) {
 
   let deadlineHtml = '';
   if (task.deadline) {
-    const isOverdue = new Date(task.deadline) < new Date() && task.status !== 'DONE';
+    const cleanDeadline = task.deadline.slice(0, 10);
+    const now = new Date();
+    const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    const isOverdue = cleanDeadline < todayStr && task.status !== 'DONE';
+    const isToday = cleanDeadline === todayStr && task.status !== 'DONE';
+
+    let deadlineStatusText = '';
+    let deadlineClass = '';
+    if (isOverdue) {
+      deadlineClass = 'overdue';
+      deadlineStatusText = '(Quá hạn)';
+    } else if (isToday) {
+      deadlineClass = 'today';
+      deadlineStatusText = '(Hạn hôm nay)';
+    }
+
     deadlineHtml = `
-      <div class="card-deadline ${isOverdue ? 'overdue' : ''}">
+      <div class="card-deadline ${deadlineClass}">
         <i class="fa-regular fa-calendar"></i>
-        <span>${task.deadline} ${isOverdue ? '(Quá hạn)' : ''}</span>
+        <span>${task.deadline} ${deadlineStatusText}</span>
       </div>
     `;
   }
@@ -124,6 +139,9 @@ function createKanbanCardElement(task) {
       </div>
       <div style="display: flex; align-items: center; gap: 8px;">
         <span class="priority-pill ${task.priority}">${task.priority}</span>
+        <button type="button" class="btn-card-copy" title="Nhân bản (Duplicate) task này" onclick="duplicateTask(${task.id}, event)">
+          <i class="fa-regular fa-copy"></i>
+        </button>
         <button type="button" class="btn-card-del" title="Xóa task này" onclick="deleteTask(${task.id}, event)">
           <i class="fa-solid fa-trash-can"></i>
         </button>
@@ -212,10 +230,49 @@ function deleteCurrentModalTask(event) {
 }
 window.deleteCurrentModalTask = deleteCurrentModalTask;
 
+// Global Single Task Duplication
+async function duplicateTask(taskId, event) {
+  if (event) {
+    event.stopPropagation();
+    event.preventDefault();
+  }
+  try {
+    const res = await fetch(`/api/tasks/${taskId}/duplicate`, { method: 'POST' });
+    if (res.ok) {
+      const newTask = await res.json();
+      window.showToast?.(`Đã nhân bản thành công task mới #${newTask.id}!`, 'success');
+      const taskModal = document.getElementById('taskModal');
+      if (taskModal) taskModal.classList.remove('active');
+      await loadTasks();
+      if (window.updateStatsAndProgress) window.updateStatsAndProgress();
+    } else {
+      const err = await res.json().catch(() => ({}));
+      window.showToast?.(err.detail || 'Lỗi khi nhân bản task', 'error');
+    }
+  } catch (err) {
+    console.error('Error duplicating task:', err);
+    window.showToast?.('Lỗi kết nối khi nhân bản task', 'error');
+  }
+}
+window.duplicateTask = duplicateTask;
+
+function duplicateCurrentModalTask(event) {
+  if (event) {
+    event.stopPropagation();
+    event.preventDefault();
+  }
+  const idInput = document.getElementById('taskFormId');
+  const taskId = idInput ? idInput.value : null;
+  if (!taskId) return;
+  duplicateTask(taskId, event);
+}
+window.duplicateCurrentModalTask = duplicateCurrentModalTask;
+
 function openEditTaskModal(task) {
   const taskModal = document.getElementById('taskModal');
   const taskModalTitle = document.getElementById('taskModalTitle');
   const btnDeleteCurrentTask = document.getElementById('btnDeleteCurrentTask');
+  const btnDuplicateCurrentTask = document.getElementById('btnDuplicateCurrentTask');
 
   document.getElementById('taskFormId').value = task.id;
   document.getElementById('taskFormTitle').value = task.title;
@@ -229,6 +286,9 @@ function openEditTaskModal(task) {
 
   if (btnDeleteCurrentTask) {
     btnDeleteCurrentTask.style.display = 'inline-flex';
+  }
+  if (btnDuplicateCurrentTask) {
+    btnDuplicateCurrentTask.style.display = 'inline-flex';
   }
 
   if (taskModalTitle) {
@@ -278,6 +338,7 @@ function initKanban() {
   const taskModal = document.getElementById('taskModal');
   const taskModalTitle = document.getElementById('taskModalTitle');
   const btnDeleteCurrentTask = document.getElementById('btnDeleteCurrentTask');
+  const btnDuplicateCurrentTask = document.getElementById('btnDuplicateCurrentTask');
   const btnExportMonthlyReport = document.getElementById('btnExportMonthlyReport');
 
   // Filter System
@@ -338,6 +399,7 @@ function initKanban() {
       if (idInput) idInput.value = '';
       if (taskModalTitle) taskModalTitle.innerHTML = '<i class="fa-solid fa-plus-circle"></i> Tạo Task Mới';
       if (btnDeleteCurrentTask) btnDeleteCurrentTask.style.display = 'none';
+      if (btnDuplicateCurrentTask) btnDuplicateCurrentTask.style.display = 'none';
       taskModal?.classList.add('active');
     });
   }

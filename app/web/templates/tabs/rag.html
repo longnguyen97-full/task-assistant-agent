@@ -17,15 +17,24 @@
         <div class="upload-category-selector">
           <label><i class="fa-solid fa-tag"></i> Phân loại tài liệu:</label>
           <div class="category-radio-group">
-            <label class="cat-pill active">
+            <label class="cat-pill active" id="labelCatGeneral">
               <input type="radio" name="docCategory" value="GENERAL" checked>
               <span>🌐 Kỹ thuật chung</span>
             </label>
-            <label class="cat-pill">
+            <label class="cat-pill" id="labelCatProject">
               <input type="radio" name="docCategory" value="PROJECT">
               <span>📁 Dự án riêng / Website</span>
             </label>
           </div>
+        </div>
+
+        <div id="uploadProjectSelectWrapper" style="display: none; margin-bottom: 12px; padding: 10px 14px; background: rgba(59, 130, 246, 0.08); border: 1px solid rgba(59, 130, 246, 0.2); border-radius: 8px;">
+          <label for="uploadProjectSelect" style="display: block; font-size: 0.8rem; font-weight: 600; color: var(--accent-blue); margin-bottom: 4px;">
+            <i class="fa-solid fa-diagram-project"></i> Chỉ định dự án / website cho tài liệu:
+          </label>
+          <select id="uploadProjectSelect" style="width: 100%; background: var(--bg-glass-input); color: var(--text-main); border: 1px solid var(--border-subtle); border-radius: 6px; padding: 6px 10px; font-size: 0.84rem;">
+            <option value="">-- Đang nạp danh sách dự án... --</option>
+          </select>
         </div>
 
         <div class="upload-dropzone" id="dropZone">

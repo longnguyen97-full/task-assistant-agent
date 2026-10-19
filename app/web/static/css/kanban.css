@@ -259,6 +259,11 @@
   font-weight: 600;
 }
 
+.card-deadline.today {
+  color: #fbbf24;
+  font-weight: 600;
+}
+
 .card-status-select {
   background: rgba(0, 0, 0, 0.3);
   border: 1px solid var(--border-subtle);

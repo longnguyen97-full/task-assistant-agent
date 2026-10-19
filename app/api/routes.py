@@ -16,7 +16,9 @@ from app.models import (
     RAGQueryRequest,
     QuickIngestRequest,
     NewProjectPlanRequest,
-    ChangeNoteCreateRequest
+    ChangeNoteCreateRequest,
+    DocumentScopeUpdateRequest,
+    ProjectStorageTierUpdateRequest
 )
 from app.database import (
     db_get_all_tasks,
@@ -24,14 +26,21 @@ from app.database import (
     db_update_task,
     db_delete_task,
     db_delete_all_tasks,
+    db_duplicate_task,
     db_get_task_by_id,
     db_add_daily_note,
     db_get_daily_notes,
     db_get_email_logs,
     db_get_chat_history,
+    db_delete_last_chat_message,
     db_get_all_projects,
-    db_get_change_notes
+    db_get_change_notes,
+    db_delete_project,
+    db_update_document_scope,
+    db_get_registered_sites,
+    db_update_project_storage_tier
 )
+from app.tools.storage_tier_tools import evaluate_project_storage_tiers
 from app.tools.task_parser import parse_teams_or_email_message
 from app.tools.planning_tools import (
     generate_new_project_plan_and_timeline,
@@ -39,7 +48,7 @@ from app.tools.planning_tools import (
     tool_analyze_project_plan_and_risks
 )
 from app.tools.email_tools import tool_dispatch_email
-from app.agent.graph import execute_react_agent, execute_chat
+from app.agent.graph import execute_react_agent, execute_chat, request_agent_cancellation
 from app.rag.vector_store import (
     get_rag_stats,
     index_documents,
@@ -58,6 +67,12 @@ async def chat_endpoint(req: ChatRequest):
         raise HTTPException(status_code=400, detail="Nội dung tin nhắn không được để trống")
     response = execute_chat(user_message=req.message, author=req.author or "Developer")
     return response
+
+@api_router.post("/chat/cancel")
+async def cancel_chat_endpoint():
+    request_agent_cancellation()
+    deleted = db_delete_last_chat_message(role="user")
+    return {"success": True, "message": "Đã ngắt luồng suy nghĩ của Agent và xóa tin nhắn gửi nhầm", "deleted_user_msg": deleted}
 
 @api_router.get("/chat/history")
 async def get_chat_history_endpoint(limit: int = 50):
@@ -119,6 +134,13 @@ async def delete_task_endpoint(task_id: int):
         raise HTTPException(status_code=404, detail="Không tìm thấy task")
     return {"success": True, "message": f"Đã xóa task #{task_id}"}
 
+@api_router.post("/tasks/{task_id}/duplicate")
+async def duplicate_task_endpoint(task_id: int):
+    duplicated = db_duplicate_task(task_id)
+    if not duplicated:
+        raise HTTPException(status_code=404, detail="Không tìm thấy task để nhân bản")
+    return duplicated
+
 @api_router.get("/tasks/export-monthly-report")
 async def export_monthly_report_endpoint(
     author: Optional[str] = "NGUYEN HOANG BAO LONG",
@@ -152,7 +174,11 @@ async def get_docs_endpoint():
     return get_rag_stats()
 
 @api_router.post("/docs/upload")
-async def upload_document_endpoint(file: UploadFile = File(...)):
+async def upload_document_endpoint(
+    file: UploadFile = File(...),
+    scope_type: str = Form("GENERAL"),
+    project_name: Optional[str] = Form("")
+):
     allowed_exts = {".md", ".txt", ".pdf", ".xlsx", ".xls", ".csv"}
     file_ext = Path(file.filename).suffix.lower()
     if file_ext not in allowed_exts:
@@ -165,8 +191,12 @@ async def upload_document_endpoint(file: UploadFile = File(...)):
     with open(destination, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
-    # Index into ChromaDB
-    res = add_single_document(destination)
+    # Index into ChromaDB with scope and project metadata
+    res = add_single_document(
+        destination,
+        scope_type=scope_type or "GENERAL",
+        project_name=project_name or ""
+    )
 
     # If Excel / CSV, automatically parse and import tasks into Kanban
     if file_ext in (".xlsx", ".xls", ".csv"):
@@ -182,6 +212,26 @@ async def upload_document_endpoint(file: UploadFile = File(...)):
             res["excel_import_error"] = str(e)
 
     return res
+
+@api_router.put("/docs/scope")
+async def update_doc_scope_endpoint(req: DocumentScopeUpdateRequest):
+    res = db_update_document_scope(
+        filename=req.filename,
+        scope_type=req.scope_type,
+        project_name=req.project_name or ""
+    )
+    if not res:
+        raise HTTPException(status_code=404, detail=f"Không tìm thấy tài liệu '{req.filename}' trong hệ thống")
+    # Reindex ChromaDB to refresh metadata in vector store
+    try:
+        index_documents(force_reindex=True)
+    except Exception as e:
+        print(f"Warning: could not reindex after scope update: {e}")
+    return {
+        "success": True,
+        "message": f"Đã chuyển tài liệu '{req.filename}' sang phạm vi '{res['scope_type']}'" + (f" ({res['project_name']})" if res.get('project_name') else "") + "!",
+        "document": res
+    }
 
 @api_router.post("/docs/reindex")
 async def reindex_docs_endpoint():
@@ -199,6 +249,12 @@ async def delete_document_endpoint(filename: str):
 async def query_rag_endpoint(req: RAGQueryRequest):
     results = query_rag(req.query, top_k=req.top_k or 4)
     return {"query": req.query, "results": results}
+
+@api_router.get("/sites")
+async def get_registered_sites_endpoint():
+    sites = db_get_registered_sites()
+    return {"sites": sites, "total": len(sites)}
+
 
 # --- 5. PLANNING & RISKS ENDPOINT ---
 @api_router.get("/planning/analyze")
@@ -297,16 +353,47 @@ async def ingest_teams_email_endpoint(req: QuickIngestRequest):
 
 # --- 11. PROJECTS & SCOPE CHANGE NOTES ENDPOINTS ---
 @api_router.get("/projects")
-async def get_projects_endpoint():
-    projects = db_get_all_projects()
-    return {"projects": projects, "total": len(projects)}
+async def get_projects_endpoint(tier: Optional[str] = None):
+    projects = db_get_all_projects(storage_tier=tier)
+    hot_count = sum(1 for p in projects if (p.get("storage_tier") or "HOT").upper() == "HOT")
+    cold_count = sum(1 for p in projects if (p.get("storage_tier") or "HOT").upper() == "COLD")
+    return {
+        "projects": projects,
+        "total": len(projects),
+        "hot_count": hot_count,
+        "cold_count": cold_count
+    }
+
+@api_router.put("/projects/{project_id}/storage-tier")
+async def update_project_storage_tier_endpoint(project_id: int, req: ProjectStorageTierUpdateRequest):
+    tier = req.storage_tier.strip().upper()
+    if tier not in ("HOT", "COLD"):
+        raise HTTPException(status_code=400, detail="Vùng lưu trữ không hợp lệ. Phải là 'HOT' hoặc 'COLD'.")
+    try:
+        updated = db_update_project_storage_tier(project_id, tier)
+        if not updated:
+            raise HTTPException(status_code=404, detail=f"Không tìm thấy dự án #{project_id}")
+        tier_label = "🔥 Hot Storage" if tier == "HOT" else "❄️ Cold Storage"
+        return {
+            "success": True,
+            "message": f"Đã chuyển dự án '{updated['name']}' sang phân vùng {tier_label}!",
+            "project": updated
+        }
+    except ValueError as ve:
+        raise HTTPException(status_code=400, detail=str(ve))
+
+@api_router.get("/projects/tier-analysis")
+async def get_projects_tier_analysis_endpoint():
+    """AI Storage Advisor phân tích các dự án và đề xuất chuyển vùng Hot/Cold."""
+    return evaluate_project_storage_tiers()
 
 @api_router.post("/projects/new-plan")
 async def create_new_project_plan_endpoint(req: NewProjectPlanRequest):
     result = generate_new_project_plan_and_timeline(
         project_name=req.project_name,
         requirements=req.requirements,
-        target_deadline=req.target_deadline or ""
+        target_deadline=req.target_deadline or "",
+        storage_tier=req.storage_tier or "HOT"
     )
     return result
 
@@ -324,4 +411,12 @@ async def add_change_note_endpoint(req: ChangeNoteCreateRequest):
         author=req.author or "Developer"
     )
     return result
+
+@api_router.delete("/projects/{project_id}")
+async def delete_project_endpoint(project_id: int, delete_tasks: bool = False):
+    success = db_delete_project(project_id, delete_tasks=delete_tasks)
+    if not success:
+        raise HTTPException(status_code=404, detail="Không tìm thấy dự án")
+    return {"success": True, "message": f"Đã xóa dự án #{project_id} thành công!"}
+
 

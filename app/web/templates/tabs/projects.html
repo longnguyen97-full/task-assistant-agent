@@ -5,7 +5,7 @@
     <div class="projects-header">
       <div class="projects-title-box">
         <h2><i class="fa-solid fa-diagram-project"></i> Quản Lý Dự Án & Timeline Kế Hoạch</h2>
-        <p>Theo dõi tiến độ 4 giai đoạn WBS, quản lý timeline và bảo toàn kế hoạch gốc khi có thay đổi</p>
+        <p>Theo dõi tiến độ phân kỳ giai đoạn WBS, quản lý timeline và bảo toàn kế hoạch gốc khi có thay đổi</p>
       </div>
       <div class="projects-header-actions">
         <button type="button" class="btn-action-primary" id="btnOpenNewProjectModal">
@@ -17,10 +17,56 @@
       </div>
     </div>
 
+    <!-- AI Storage Advisor Banner -->
+    <div class="ai-advisor-card" id="aiAdvisorCard">
+      <div class="ai-advisor-top">
+        <div class="ai-advisor-info">
+          <div class="ai-advisor-badge-icon">
+            <i class="fa-solid fa-brain"></i>
+          </div>
+          <div>
+            <div class="ai-advisor-title-row">
+              <h4>AI Storage Tier Advisor</h4>
+              <span class="badge-tag cyan"><i class="fa-solid fa-shield-halved"></i> Đề xuất có kiểm duyệt</span>
+            </div>
+            <p>Đánh giá dự án dựa trên tasks đang chạy, mức độ ưu tiên và tần suất chat để đề xuất chuyển Hot/Cold (Tuyệt đối không tự ý chuyển)</p>
+          </div>
+        </div>
+        <div class="ai-advisor-actions">
+          <button type="button" class="btn-action-primary" id="btnRunAiAdvisor">
+            <i class="fa-solid fa-wand-magic-sparkles"></i> <span>AI Đánh Giá Dự Án</span>
+          </button>
+        </div>
+      </div>
+      <!-- Proposals list accordion/container -->
+      <div class="ai-advisor-proposals-box" id="aiAdvisorProposalsBox" style="display: none;">
+        <div class="ai-proposals-header">
+          <h5><i class="fa-solid fa-list-check text-purple"></i> Kết Quả Đánh Giá & Đề Xuất Phân Vùng:</h5>
+          <button type="button" class="btn-icon-tiny" id="btnCloseAiProposals" title="Đóng bảng đề xuất"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div class="ai-proposals-list" id="aiProposalsList">
+          <!-- Rendered dynamically -->
+        </div>
+      </div>
+    </div>
+
     <!-- Active Projects & Timeline Grid (Main Hero Content) -->
     <div class="projects-list-section">
       <div class="section-title-bar">
-        <h3><i class="fa-solid fa-folder-open"></i> Danh Sách Dự Án & Timeline 4 Giai Đoạn</h3>
+        <div class="tier-filter-group" id="tierFilterGroup">
+          <button type="button" class="tier-filter-btn active" data-tier="ALL">
+            <i class="fa-solid fa-layer-group"></i> <span>Tất Cả</span>
+            <span class="filter-count" id="countAllProjects">0</span>
+          </button>
+          <button type="button" class="tier-filter-btn tier-btn-hot" data-tier="HOT">
+            <i class="fa-solid fa-fire text-orange"></i> <span>Hot Storage</span>
+            <span class="filter-count" id="countHotProjects">0</span>
+          </button>
+          <button type="button" class="tier-filter-btn tier-btn-cold" data-tier="COLD">
+            <i class="fa-solid fa-snowflake text-cyan"></i> <span>Cold Storage</span>
+            <span class="filter-count" id="countColdProjects">0</span>
+          </button>
+        </div>
         <div style="display: flex; align-items: center; gap: 10px;">
           <span class="badge-tag purple" id="projectsCountBadge">0 dự án</span>
           <button type="button" class="btn-icon" id="btnRefreshProjects" title="Làm mới danh sách"><i class="fa-solid fa-rotate"></i></button>
@@ -54,6 +100,13 @@
               <div class="form-group flex-1">
                 <label for="newProjectDeadline"><i class="fa-solid fa-calendar-check"></i> Hạn Chót Dự Kiến</label>
                 <input type="date" id="newProjectDeadline" onclick="try{this.showPicker()}catch(e){}">
+              </div>
+              <div class="form-group flex-1">
+                <label for="newProjectStorageTier"><i class="fa-solid fa-hard-drive"></i> Phân Vùng Lưu Trữ</label>
+                <select id="newProjectStorageTier">
+                  <option value="HOT" selected>🔥 Hot Storage (Triển khai nóng)</option>
+                  <option value="COLD">❄️ Cold Storage (Lưu trữ đóng băng)</option>
+                </select>
               </div>
             </div>
 

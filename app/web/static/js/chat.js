@@ -32,6 +32,10 @@ async function loadChatHistory() {
 }
 window.loadChatHistory = loadChatHistory;
 
+let currentChatAbortController = null;
+let lastSubmittedMessageText = '';
+let lastSubmittedUserWrapper = null;
+
 function appendChatMessage(role, content, toolCalls = [], timestamp = null) {
   const chatMessages = document.getElementById('chatMessages');
   if (!chatMessages) return;
@@ -39,6 +43,10 @@ function appendChatMessage(role, content, toolCalls = [], timestamp = null) {
   const isUser = role === 'user';
   const wrapper = document.createElement('div');
   wrapper.className = `message-wrapper ${isUser ? 'user' : 'assistant'}`;
+
+  if (isUser) {
+    lastSubmittedUserWrapper = wrapper;
+  }
 
   const avatarHtml = isUser 
     ? '<div class="msg-avatar"><i class="fa-solid fa-user"></i></div>'
@@ -92,8 +100,11 @@ function appendTypingIndicator() {
   wrapper.className = 'message-wrapper assistant';
   wrapper.innerHTML = `
     <div class="msg-avatar"><i class="fa-solid fa-robot"></i></div>
-    <div class="msg-bubble" style="padding: 12px 18px;">
+    <div class="msg-bubble" style="padding: 10px 16px; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;">
       <span style="color: var(--text-dim); font-size: 0.85rem;"><i class="fa-solid fa-circle-notch fa-spin"></i> Task Assistant đang suy luận và xử lý...</span>
+      <button type="button" class="btn-stop-thinking" onclick="abortChatThinking(event)" title="Ngắt luồng & Sửa lại tin nhắn (Esc)">
+        <i class="fa-solid fa-stop"></i> <span>Dừng & Sửa lại</span>
+      </button>
     </div>
   `;
   chatMessages.appendChild(wrapper);
@@ -104,6 +115,53 @@ function removeTypingIndicator() {
   const indicator = document.getElementById('typingIndicator');
   if (indicator) indicator.remove();
 }
+
+async function abortChatThinking(event) {
+  if (event) {
+    event.stopPropagation();
+    event.preventDefault();
+  }
+
+  if (currentChatAbortController) {
+    try {
+      currentChatAbortController.abort();
+    } catch (e) {}
+    currentChatAbortController = null;
+  }
+
+  // Notify backend to cancel and delete mistakenly saved user message
+  fetch('/api/chat/cancel', { method: 'POST' }).catch(() => {});
+
+  removeTypingIndicator();
+
+  // Remove the uncompleted user message element from the DOM
+  if (lastSubmittedUserWrapper && lastSubmittedUserWrapper.parentNode) {
+    lastSubmittedUserWrapper.remove();
+    lastSubmittedUserWrapper = null;
+  }
+
+  // Restore input text so developer can edit and correct it
+  const chatInput = document.getElementById('chatInput');
+  if (chatInput) {
+    chatInput.value = lastSubmittedMessageText || '';
+    chatInput.style.height = 'auto';
+    chatInput.style.height = `${Math.min(chatInput.scrollHeight, 120)}px`;
+    chatInput.focus();
+    chatInput.setSelectionRange(chatInput.value.length, chatInput.value.length);
+  }
+
+  isSendingMessage = false;
+  const btnSendMessage = document.getElementById('btnSendMessage');
+  if (btnSendMessage) {
+    btnSendMessage.disabled = false;
+    btnSendMessage.classList.remove('btn-send-stop');
+    btnSendMessage.innerHTML = '<i class="fa-solid fa-arrow-up"></i>';
+    btnSendMessage.title = 'Gửi tin nhắn';
+  }
+
+  window.showToast?.('Đã dừng suy nghĩ! Nội dung tin nhắn đã được phục hồi để bạn chỉnh sửa.', 'info');
+}
+window.abortChatThinking = abortChatThinking;
 
 let selectedAttachment = null;
 
@@ -116,7 +174,15 @@ async function handleSendMessage(messageText) {
   if ((!messageText && !selectedAttachment) || isSendingMessage) return;
 
   isSendingMessage = true;
-  if (btnSendMessage) btnSendMessage.disabled = true;
+  lastSubmittedMessageText = messageText || '';
+
+  // Switch Send button to Stop button while thinking
+  if (btnSendMessage) {
+    btnSendMessage.disabled = false;
+    btnSendMessage.classList.add('btn-send-stop');
+    btnSendMessage.innerHTML = '<i class="fa-solid fa-stop"></i>';
+    btnSendMessage.title = 'Dừng suy nghĩ & Sửa lại tin nhắn (Esc)';
+  }
 
   let outgoingText = messageText || '';
   let attachedName = '';
@@ -160,33 +226,48 @@ async function handleSendMessage(messageText) {
 
   appendTypingIndicator();
 
+  currentChatAbortController = new AbortController();
+
   try {
     const res = await fetch('/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: outgoingText, author: 'Developer' })
+      body: JSON.stringify({ message: outgoingText, author: 'Developer' }),
+      signal: currentChatAbortController.signal
     });
 
     removeTypingIndicator();
 
     if (!res.ok) {
-      const err = await res.json();
+      const err = await res.json().catch(() => ({}));
       window.showToast?.(err.detail || 'Lỗi khi gửi tin nhắn', 'error');
       appendChatMessage('assistant', '⚠️ Đã xảy ra lỗi khi kết nối với AI Agent. Vui lòng thử lại.');
     } else {
       const data = await res.json();
-      appendChatMessage('assistant', data.content, data.tool_calls);
-      if (window.loadTasks) window.loadTasks();
-      if (window.loadDailyNotes) window.loadDailyNotes();
-      if (window.updateStatsAndProgress) window.updateStatsAndProgress();
+      if (!data.cancelled) {
+        appendChatMessage('assistant', data.content, data.tool_calls);
+        if (window.loadTasks) window.loadTasks();
+        if (window.loadDailyNotes) window.loadDailyNotes();
+        if (window.updateStatsAndProgress) window.updateStatsAndProgress();
+      }
     }
   } catch (err) {
     removeTypingIndicator();
+    if (err.name === 'AbortError') {
+      console.log('Chat fetch aborted by user.');
+      return;
+    }
     console.error(err);
     window.showToast?.('Lỗi mạng khi kết nối server', 'error');
   } finally {
     isSendingMessage = false;
-    if (btnSendMessage) btnSendMessage.disabled = false;
+    currentChatAbortController = null;
+    if (btnSendMessage) {
+      btnSendMessage.disabled = false;
+      btnSendMessage.classList.remove('btn-send-stop');
+      btnSendMessage.innerHTML = '<i class="fa-solid fa-arrow-up"></i>';
+      btnSendMessage.title = 'Gửi tin nhắn';
+    }
   }
 }
 window.handleSendMessage = handleSendMessage;
@@ -280,15 +361,31 @@ function initChat() {
   if (chatForm) {
     chatForm.addEventListener('submit', (e) => {
       e.preventDefault();
+      if (isSendingMessage) {
+        abortChatThinking(e);
+        return;
+      }
       const text = chatInput?.value.trim();
       if (text) handleSendMessage(text);
     });
   }
 
+  // Keyboard shortcut: Press Escape to stop agent thinking & edit message
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && isSendingMessage) {
+      e.preventDefault();
+      abortChatThinking(e);
+    }
+  });
+
   if (chatInput) {
     chatInput.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
+        if (isSendingMessage) {
+          abortChatThinking(e);
+          return;
+        }
         const text = chatInput.value.trim();
         if (text) handleSendMessage(text);
       }

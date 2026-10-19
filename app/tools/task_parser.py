@@ -21,19 +21,25 @@ def parse_teams_or_email_message(raw_text: str, source: str = "TEAMS", author: s
     text_lower = clean_text.lower()
 
     # 1. Detect target website / project
-    detected_site = "Chung"
-    site_keywords = {
-        "KIG Website": ["kig", "kinderworld international group"],
-        "SIS / SVIS Website": ["sis", "svis", "singapore international school", "singapore vietnamese"],
-        "KIK Website": ["kik", "kinderworld international kindergarten"],
-        "Pegasus Website": ["pegasus", "pic", "pihm"],
-        "SISH Website": ["sish", "sish institute"],
-        "OBV Website": ["obv", "outward bound", "outwardbound"]
-    }
-    for site_name, kw_list in site_keywords.items():
-        if any(kw in text_lower for kw in kw_list):
-            detected_site = site_name
-            break
+    detected_site = ""
+    proj_match = re.search(r"(?:project|dự án|hệ thống)\s+([^,\.\n:]+)", clean_text, re.IGNORECASE)
+    if proj_match:
+        detected_site = proj_match.group(1).strip()
+    else:
+        site_keywords = {
+            "KIG Website": ["kig", "kinderworld international group"],
+            "SIS / SVIS Website": ["sis", "svis", "singapore international school", "singapore vietnamese"],
+            "KIK Website": ["kik", "kinderworld international kindergarten"],
+            "Pegasus Website": ["pegasus", "pic", "pihm"],
+            "SISH Website": ["sish", "sish institute"],
+            "OBV Website": ["obv", "outward bound", "outwardbound"]
+        }
+        for site_name, kw_list in site_keywords.items():
+            if any(kw in text_lower for kw in kw_list):
+                detected_site = site_name
+                break
+    if not detected_site:
+        detected_site = "Chung"
 
     # 2. Detect Priority
     priority = "MEDIUM"
@@ -48,7 +54,7 @@ def parse_teams_or_email_message(raw_text: str, source: str = "TEAMS", author: s
     deadline_str = ""
     today = datetime.now()
     
-    # Try exact date patterns like 25/10, 25-10, 2026-10-25
+    # Try exact date patterns like 25/10, 25-10, 2026-10-25, 23/10/2026
     date_match = re.search(r"(\d{1,2})[/-](\d{1,2})(?:[/-](\d{4}))?", clean_text)
     if date_match:
         try:
@@ -78,15 +84,17 @@ def parse_teams_or_email_message(raw_text: str, source: str = "TEAMS", author: s
             deadline_str = last_day.strftime("%Y-%m-%d")
 
     # 4. Extract Title & Action items
-    lines = [l.strip() for l in clean_text.split("\n") if l.strip()]
-    first_line = lines[0] if lines else clean_text[:60]
-    
-    # Clean email/teams prefixes
-    title_candidate = re.sub(r"^(?:re:|fwd:|fw:|\[teams\]|\[email\]|task:|yêu cầu:)\s*", "", first_line, flags=re.IGNORECASE).strip()
-    if len(title_candidate) > 70:
-        title_candidate = title_candidate[:70] + "..."
-    if not title_candidate:
-        title_candidate = f"Xử lý yêu cầu từ {source}"
+    content_match = re.search(r"(?:nội dung|yêu cầu)\s*:\s*([^,\.\n]+.*)", clean_text, re.IGNORECASE)
+    if content_match:
+        title_candidate = content_match.group(1).strip()
+    else:
+        lines = [l.strip() for l in clean_text.split("\n") if l.strip()]
+        first_line = lines[0] if lines else clean_text[:60]
+        title_candidate = re.sub(r"^(?:re:|fwd:|fw:|\[teams\]|\[email\]|task:|yêu cầu:)\s*", "", first_line, flags=re.IGNORECASE).strip()
+
+    title_candidate = title_candidate[0].upper() + title_candidate[1:] if title_candidate else f"Xử lý yêu cầu từ {source}"
+    if len(title_candidate) > 75:
+        title_candidate = title_candidate[:72] + "..."
 
     formatted_title = f"[{detected_site}] {title_candidate}"
 

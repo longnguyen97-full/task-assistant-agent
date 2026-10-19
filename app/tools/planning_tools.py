@@ -103,7 +103,7 @@ def tool_analyze_project_plan_and_risks() -> str:
         "timeline_reference_from_rag": timeline_context
     }, ensure_ascii=False)
 
-def generate_new_project_plan_and_timeline(project_name: str, requirements: str, target_deadline: str = "") -> Dict[str, Any]:
+def generate_new_project_plan_and_timeline(project_name: str, requirements: str, target_deadline: str = "", storage_tier: str = "HOT") -> Dict[str, Any]:
     """Tự động phân rã yêu cầu dự án mới thành Bản Kế Hoạch Thực Hiện + Bảng Timeline (WBS & Milestones) để nộp sếp / khách hàng.
     Chia rõ ràng 4 giai đoạn cụ thể: từ ngày nào tới ngày nào, thành viên thực hiện, nội dung thực hiện, và mục tiêu.
     """
@@ -144,48 +144,145 @@ def generate_new_project_plan_and_timeline(project_name: str, requirements: str,
     p4_start = p3_end + timedelta(days=1)
     p4_end = target_date
 
-    phases = [
-        {
-            "phase_num": 1,
-            "name": "Giai đoạn 1: Khảo sát, Phân tích Specs & Thiết kế Kiến trúc",
-            "start_date": p1_start.strftime("%Y-%m-%d"),
-            "end_date": p1_end.strftime("%Y-%m-%d"),
-            "duration_days": d1,
-            "assignees": "Tech Lead, Solution Architect, Business Analyst",
-            "tasks": ["Phân tích specs & yêu cầu hệ thống", "Thiết kế database & mockup giao diện UI/UX"],
-            "objective": "Hoàn thiện tài liệu kiến trúc, specs và wireframe UI/UX được phê duyệt"
-        },
-        {
-            "phase_num": 2,
-            "name": "Giai đoạn 2: Phát triển Backend & Cơ sở dữ liệu Cốt lõi",
-            "start_date": p2_start.strftime("%Y-%m-%d"),
-            "end_date": p2_end.strftime("%Y-%m-%d"),
-            "duration_days": d2,
-            "assignees": "Backend Developer, Database Administrator",
-            "tasks": ["Xây dựng API, endpoints & cơ sở dữ liệu", "Tích hợp nghiệp vụ bảo mật & logic cốt lõi"],
-            "objective": "Hoàn thiện toàn bộ API endpoints, migration DB và vượt qua Unit Tests"
-        },
-        {
-            "phase_num": 3,
-            "name": "Giai đoạn 3: Phát triển Giao diện Frontend & Tích hợp Hệ thống",
-            "start_date": p3_start.strftime("%Y-%m-%d"),
-            "end_date": p3_end.strftime("%Y-%m-%d"),
-            "duration_days": d3,
-            "assignees": "Frontend Developer, UI/UX Designer",
-            "tasks": ["Xây dựng UI/UX theo thiết kế responsive", "Kết nối frontend với backend API và xử lý dữ liệu"],
-            "objective": "Giao diện hoàn chỉnh, tương tác mượt mà, kết nối trơn tru với API trên môi trường staging"
-        },
-        {
-            "phase_num": 4,
-            "name": "Giai đoạn 4: Kiểm thử UAT, Tối ưu & Triển khai Production",
-            "start_date": p4_start.strftime("%Y-%m-%d"),
-            "end_date": p4_end.strftime("%Y-%m-%d"),
-            "duration_days": d4,
-            "assignees": "QA/Tester, DevOps, Project Manager",
-            "tasks": ["Chạy kiểm thử chức năng, UAT người dùng", "Deploy production, cấu hình domain, SSL & bàn giao"],
-            "objective": "Nghiệm thu toàn diện, triển khai production an toàn và bàn giao đầy đủ cho khách hàng/sếp"
-        }
-    ]
+    req_lower = requirements.lower()
+    
+    # 1. Phát hiện loại dự án để sinh các giai đoạn phù hợp thực tế, tránh over-engineering
+    is_clone_or_content = any(w in req_lower for w in ["clone", "nhân bản", "cắt gọt", "copy", "tách site", "chuyển nội dung", "biên tập nội dung"])
+    is_opt_or_refactor = any(w in req_lower for w in ["tối ưu", "speed", "refactor", "convert elementor", "tải trang", "hiệu năng", "bảo trì"])
+    
+    if is_clone_or_content:
+        # Quy trình chuyên biệt cho bài toán Clone & Cắt gọt / Thay đổi nội dung website
+        phases = [
+            {
+                "phase_num": 1,
+                "name": "Giai đoạn 1: Setup Môi Trường & Nhân Bản Source Code / Database",
+                "start_date": p1_start.strftime("%Y-%m-%d"),
+                "end_date": p1_end.strftime("%Y-%m-%d"),
+                "duration_days": d1,
+                "assignees": "Web Developer",
+                "tasks": [f"Nhân bản source code và database từ site gốc sang {project_name}", "Cấu hình môi trường staging và kiểm tra kết nối dữ liệu ban đầu"],
+                "objective": "Môi trường staging clone hoạt động thông suốt, nguyên vẹn dữ liệu gốc"
+            },
+            {
+                "phase_num": 2,
+                "name": "Giai đoạn 2: Cắt Gọt, Chỉnh Sửa & Cập Nhật Nội Dung Mới",
+                "start_date": p2_start.strftime("%Y-%m-%d"),
+                "end_date": p2_end.strftime("%Y-%m-%d"),
+                "duration_days": d2,
+                "assignees": "Web Developer, Content Editor",
+                "tasks": ["Cắt gọt, loại bỏ các trang/mục không cần thiết", f"Cập nhật nội dung, logo, banner và thông tin đặc thù cho {project_name}"],
+                "objective": "Toàn bộ nội dung và layout hiển thị đúng yêu cầu cắt gọt và thương hiệu mới"
+            },
+            {
+                "phase_num": 3,
+                "name": "Giai đoạn 3: Kiểm Thử Giao Diện, Responsive & Biểu Mẫu",
+                "start_date": p3_start.strftime("%Y-%m-%d"),
+                "end_date": p3_end.strftime("%Y-%m-%d"),
+                "duration_days": d3,
+                "assignees": "Web Developer, QA/Tester",
+                "tasks": ["Kiểm tra hiển thị responsive trên mobile và desktop", "Kiểm tra hoạt động các form liên hệ, gửi mail và liên kết"],
+                "objective": "Website hoạt động trơn tru, không có link hỏng, biểu mẫu gửi nhận ổn định"
+            },
+            {
+                "phase_num": 4,
+                "name": "Giai đoạn 4: Cấu Hình Domain, SSL & Nghiệm Thu Bàn Giao",
+                "start_date": p4_start.strftime("%Y-%m-%d"),
+                "end_date": p4_end.strftime("%Y-%m-%d"),
+                "duration_days": d4,
+                "assignees": "Web Developer, Dev Lead",
+                "tasks": ["Trỏ domain chính thức, kích hoạt SSL & cấu hình bảo mật", f"Nghiệm thu toàn diện và bàn giao website {project_name}"],
+                "objective": "Website chính thức hoạt động trên production, bàn giao đầy đủ cho khách hàng/sếp"
+            }
+        ]
+    elif is_opt_or_refactor:
+        # Quy trình chuyên biệt cho bài toán Tối ưu hóa / Refactor
+        phases = [
+            {
+                "phase_num": 1,
+                "name": "Giai đoạn 1: Audit Mã Nguồn & Định Lượng Điểm Nghẽn",
+                "start_date": p1_start.strftime("%Y-%m-%d"),
+                "end_date": p1_end.strftime("%Y-%m-%d"),
+                "duration_days": d1,
+                "assignees": "Senior Developer",
+                "tasks": ["Đo lường điểm số PageSpeed / Core Web Vitals hiện tại", "Xác định mã nguồn, plugin và tài nguyên gây tải chậm"],
+                "objective": "Báo cáo audit chi tiết và danh sách các hạng mục cần tối ưu"
+            },
+            {
+                "phase_num": 2,
+                "name": "Giai đoạn 2: Tối Ưu Hóa / Chuyển Đổi Hand-Code & Clean Asset",
+                "start_date": p2_start.strftime("%Y-%m-%d"),
+                "end_date": p2_end.strftime("%Y-%m-%d"),
+                "duration_days": d2,
+                "assignees": "Frontend Developer, Backend Developer",
+                "tasks": ["Chuyển đổi các khối nặng qua mã nguồn tĩnh/hand-code", "Tối ưu hóa hình ảnh WebP, nén CSS/JS và cache"],
+                "objective": "Mã nguồn sạch, giảm dung lượng trang và thời gian phản hồi"
+            },
+            {
+                "phase_num": 3,
+                "name": "Giai đoạn 3: Kiểm Thử Tương Thích & Đánh Giá Benchmark",
+                "start_date": p3_start.strftime("%Y-%m-%d"),
+                "end_date": p3_end.strftime("%Y-%m-%d"),
+                "duration_days": d3,
+                "assignees": "QA/Tester, Developer",
+                "tasks": ["Kiểm tra toàn bộ tính năng và giao diện sau tối ưu", "Đo lường lại tốc độ tải và benchmark so với mục tiêu"],
+                "objective": "Mọi tính năng hoạt động chuẩn xác, điểm hiệu năng cải thiện rõ rệt"
+            },
+            {
+                "phase_num": 4,
+                "name": "Giai đoạn 4: Deploy Production & Giám Sát Sau Triển Khai",
+                "start_date": p4_start.strftime("%Y-%m-%d"),
+                "end_date": p4_end.strftime("%Y-%m-%d"),
+                "duration_days": d4,
+                "assignees": "DevOps, Dev Lead",
+                "tasks": ["Deploy phiên bản tối ưu lên môi trường production", "Theo dõi tải và log hệ thống trong 48h đầu"],
+                "objective": "Hệ thống vận hành mượt mà trên production và bàn giao kết quả"
+            }
+        ]
+    else:
+        # Quy trình dự án phát triển hệ thống phần mềm mới (Greenfield)
+        phases = [
+            {
+                "phase_num": 1,
+                "name": "Giai đoạn 1: Khảo sát, Phân tích Specs & Thiết kế Kiến trúc",
+                "start_date": p1_start.strftime("%Y-%m-%d"),
+                "end_date": p1_end.strftime("%Y-%m-%d"),
+                "duration_days": d1,
+                "assignees": "Tech Lead, Solution Architect, Business Analyst",
+                "tasks": ["Phân tích specs & yêu cầu hệ thống", "Thiết kế database & mockup giao diện UI/UX"],
+                "objective": "Hoàn thiện tài liệu kiến trúc, specs và wireframe UI/UX được phê duyệt"
+            },
+            {
+                "phase_num": 2,
+                "name": "Giai đoạn 2: Phát triển Backend & Cơ sở dữ liệu Cốt lõi",
+                "start_date": p2_start.strftime("%Y-%m-%d"),
+                "end_date": p2_end.strftime("%Y-%m-%d"),
+                "duration_days": d2,
+                "assignees": "Backend Developer, Database Administrator",
+                "tasks": ["Xây dựng API, endpoints & cơ sở dữ liệu", "Tích hợp nghiệp vụ bảo mật & logic cốt lõi"],
+                "objective": "Hoàn thiện toàn bộ API endpoints, migration DB và vượt qua Unit Tests"
+            },
+            {
+                "phase_num": 3,
+                "name": "Giai đoạn 3: Phát triển Giao diện Frontend & Tích hợp Hệ thống",
+                "start_date": p3_start.strftime("%Y-%m-%d"),
+                "end_date": p3_end.strftime("%Y-%m-%d"),
+                "duration_days": d3,
+                "assignees": "Frontend Developer, UI/UX Designer",
+                "tasks": ["Xây dựng UI/UX theo thiết kế responsive", "Kết nối frontend với backend API và xử lý dữ liệu"],
+                "objective": "Giao diện hoàn chỉnh, tương tác mượt mà, kết nối trơn tru với API trên môi trường staging"
+            },
+            {
+                "phase_num": 4,
+                "name": "Giai đoạn 4: Kiểm thử UAT, Tối ưu & Triển khai Production",
+                "start_date": p4_start.strftime("%Y-%m-%d"),
+                "end_date": p4_end.strftime("%Y-%m-%d"),
+                "duration_days": d4,
+                "assignees": "QA/Tester, DevOps, Project Manager",
+                "tasks": ["Chạy kiểm thử chức năng, UAT người dùng", "Deploy production, cấu hình domain, SSL & bàn giao"],
+                "objective": "Nghiệm thu toàn diện, triển khai production an toàn và bàn giao đầy đủ cho khách hàng/sếp"
+            }
+        ]
+
 
     plan_md = f"# 📋 KẾ HOẠCH THỰC HIỆN DỰ ÁN: {project_name.upper()}\n\n"
     plan_md += f"**Thời gian dự kiến:** Từ `{p1_start.strftime('%d/%m/%Y')}` đến `{p4_end.strftime('%d/%m/%Y')}` (Tổng `{total_days}` ngày)\n"
@@ -213,7 +310,8 @@ def generate_new_project_plan_and_timeline(project_name: str, requirements: str,
         status="PLANNING",
         start_date=start_str,
         target_deadline=p4_end.strftime("%Y-%m-%d"),
-        phases_json=json.dumps(phases, ensure_ascii=False)
+        phases_json=json.dumps(phases, ensure_ascii=False),
+        storage_tier=storage_tier
     )
 
     # Automatically create initial tasks on Kanban with each phase's deadline

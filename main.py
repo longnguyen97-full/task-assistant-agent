@@ -104,7 +104,7 @@ def main():
         "main:app",
         host=settings.HOST,
         port=settings.PORT,
-        reload=False
+        reload=True
     )
 
 if __name__ == "__main__":

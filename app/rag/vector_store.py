@@ -7,6 +7,13 @@ from chromadb.config import Settings as ChromaSettings
 from chromadb.api.types import Documents, EmbeddingFunction, Embeddings
 from app.config import settings
 from app.rag.document_loader import load_all_documents, load_document
+from app.database import (
+    db_get_all_documents,
+    db_get_document_by_filename,
+    db_upsert_document,
+    db_delete_document,
+    db_get_all_projects
+)
 
 _client: Optional[chromadb.PersistentClient] = None
 _collection = None
@@ -144,8 +151,15 @@ def index_documents(force_reindex: bool = False) -> Dict[str, Any]:
     documents = []
     metadatas = []
 
+    # Cache doc records from SQLite
+    db_docs = {d["filename"]: d for d in db_get_all_documents()}
+
     for idx, item in enumerate(chunks):
         doc_id = f"chunk_{idx}_{item['metadata']['source']}"
+        src_name = item['metadata']['source']
+        doc_meta = db_docs.get(src_name, {})
+        item['metadata']['scope_type'] = doc_meta.get('scope_type', 'GENERAL')
+        item['metadata']['project_name'] = doc_meta.get('project_name', '')
         ids.append(doc_id)
         documents.append(item["content"])
         metadatas.append(item["metadata"])
@@ -169,12 +183,21 @@ def index_documents(force_reindex: bool = False) -> Dict[str, Any]:
         "message": f"Đã lập chỉ mục thành công {collection.count()} chunks vào ChromaDB bằng {model_desc}."
     }
 
-def add_single_document(file_path: Path) -> Dict[str, Any]:
-    """Thêm tài liệu mới tải lên vào ChromaDB."""
+def add_single_document(file_path: Path, scope_type: str = "GENERAL", project_name: str = "") -> Dict[str, Any]:
+    """Thêm tài liệu mới tải lên vào ChromaDB kèm metadata phân loại phạm vi."""
     collection = get_rag_collection()
     chunks = load_document(file_path)
     if not chunks:
         return {"status": "error", "message": "Không thể trích xuất nội dung từ file."}
+
+    size_kb = round(file_path.stat().st_size / 1024, 1) if file_path.exists() else 0.0
+    db_upsert_document(
+        filename=file_path.name,
+        file_path=str(file_path),
+        scope_type=scope_type,
+        project_name=project_name,
+        size_kb=size_kb
+    )
 
     ids = []
     documents = []
@@ -183,6 +206,8 @@ def add_single_document(file_path: Path) -> Dict[str, Any]:
     base_count = collection.count()
     for idx, item in enumerate(chunks):
         doc_id = f"chunk_{base_count + idx}_{item['metadata']['source']}"
+        item['metadata']['scope_type'] = scope_type.upper()
+        item['metadata']['project_name'] = project_name
         ids.append(doc_id)
         documents.append(item["content"])
         metadatas.append(item["metadata"])
@@ -197,7 +222,9 @@ def add_single_document(file_path: Path) -> Dict[str, Any]:
         "status": "success",
         "added_chunks": len(chunks),
         "total_chunks": collection.count(),
-        "filename": file_path.name
+        "filename": file_path.name,
+        "scope_type": scope_type.upper(),
+        "project_name": project_name
     }
 
 def query_rag(query: str, top_k: int = 4) -> List[Dict[str, Any]]:
@@ -259,39 +286,54 @@ def query_rag(query: str, top_k: int = 4) -> List[Dict[str, Any]]:
         return []
 
 def get_rag_stats() -> Dict[str, Any]:
-    """Trả về thống kê chỉ mục RAG và danh sách tài liệu."""
+    """Trả về thống kê chỉ mục RAG và danh sách tài liệu kèm phân loại phạm vi (GENERAL / PROJECT)."""
     try:
         collection = get_rag_collection()
         total_chunks = collection.count()
     except Exception:
         total_chunks = 0
 
+    # Retrieve docs from SQLite
+    db_docs = {d["filename"]: d for d in db_get_all_documents()}
     files = []
     supported_exts = {".md", ".txt", ".pdf", ".xlsx", ".xls", ".csv"}
+
+    def _process_file(f: Path, prefix: str = ""):
+        if f.is_file() and f.suffix.lower() in supported_exts:
+            fname = f.name
+            d_record = db_docs.get(fname, {})
+            scope = d_record.get("scope_type", "GENERAL")
+            proj = d_record.get("project_name", "")
+            if not d_record:
+                size_kb = round(f.stat().st_size / 1024, 1)
+                db_upsert_document(fname, str(f), scope, proj, size_kb)
+            files.append({
+                "name": f"{prefix}{fname}" if prefix else fname,
+                "clean_name": fname,
+                "size_kb": round(f.stat().st_size / 1024, 1),
+                "modified": f.stat().st_mtime,
+                "scope_type": scope,
+                "project_name": proj
+            })
+
     if settings.DATA_DIR.exists():
         for f in settings.DATA_DIR.glob("*"):
-            if f.is_file() and f.suffix.lower() in supported_exts:
-                files.append({
-                    "name": f.name,
-                    "size_kb": round(f.stat().st_size / 1024, 1),
-                    "modified": f.stat().st_mtime
-                })
+            _process_file(f)
 
     docs_sub = settings.DATA_DIR / "docs"
     if docs_sub.exists():
         for f in docs_sub.glob("*"):
-            if f.is_file() and f.suffix.lower() in supported_exts:
-                files.append({
-                    "name": f"docs/{f.name}",
-                    "size_kb": round(f.stat().st_size / 1024, 1),
-                    "modified": f.stat().st_mtime
-                })
+            if not any(x["clean_name"] == f.name for x in files):
+                _process_file(f, prefix="docs/")
 
     emb_name = "Google Gemini Multilingual (3072-dim)" if settings.GEMINI_API_KEY else "all-MiniLM-L6-v2 (Local)"
+    all_projects = [p["name"] for p in db_get_all_projects()]
+
     return {
         "total_chunks": total_chunks,
         "files_count": len(files),
         "files": files,
+        "projects": all_projects,
         "collection_name": COLLECTION_NAME,
         "embedding_model": emb_name
     }
@@ -304,6 +346,7 @@ def delete_document_file(filename: str) -> bool:
         if candidate.exists() and candidate.is_file():
             candidate.unlink()
             deleted = True
+    db_delete_document(clean_name)
     if deleted:
         index_documents(force_reindex=True)
     return deleted

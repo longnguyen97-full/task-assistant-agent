@@ -1,6 +1,8 @@
+import os
 import sqlite3
 import json
 from datetime import datetime
+from pathlib import Path
 from typing import List, Dict, Any, Optional
 from app.config import settings
 
@@ -76,6 +78,7 @@ def init_db():
         status TEXT DEFAULT 'IN_PROGRESS' CHECK(status IN ('PLANNING', 'IN_PROGRESS', 'COMPLETED', 'ON_HOLD')),
         timeline_doc TEXT DEFAULT '',
         plan_summary TEXT DEFAULT '',
+        storage_tier TEXT DEFAULT 'HOT' CHECK(storage_tier IN ('HOT', 'COLD')),
         created_at TEXT NOT NULL
     );
 
@@ -88,6 +91,17 @@ def init_db():
         author TEXT DEFAULT 'Developer',
         created_at TEXT NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS documents (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        filename TEXT NOT NULL UNIQUE,
+        file_path TEXT NOT NULL,
+        scope_type TEXT NOT NULL DEFAULT 'GENERAL',
+        project_name TEXT DEFAULT '',
+        size_kb REAL DEFAULT 0,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+    );
     """)
 
     # Safe migration for tasks table (source_type & website_name)
@@ -97,8 +111,8 @@ def init_db():
         except Exception:
             pass
 
-    # Safe migration for projects table (start_date, target_deadline, phases_json)
-    for col, dtype in [("start_date", "TEXT DEFAULT ''"), ("target_deadline", "TEXT DEFAULT ''"), ("phases_json", "TEXT DEFAULT '[]'")]:
+    # Safe migration for projects table (start_date, target_deadline, phases_json, storage_tier)
+    for col, dtype in [("start_date", "TEXT DEFAULT ''"), ("target_deadline", "TEXT DEFAULT ''"), ("phases_json", "TEXT DEFAULT '[]'"), ("storage_tier", "TEXT DEFAULT 'HOT'")]:
         try:
             cursor.execute(f"ALTER TABLE projects ADD COLUMN {col} {dtype}")
         except Exception:
@@ -204,6 +218,12 @@ def init_db():
     conn.commit()
     conn.close()
 
+    # Sync documents from disk into documents table
+    try:
+        db_sync_documents_from_disk()
+    except Exception as e:
+        print(f"Warning: could not sync documents from disk: {e}")
+
 # Database Helper Functions
 def db_get_all_tasks(status: Optional[str] = None, search: Optional[str] = None) -> List[Dict[str, Any]]:
     conn = get_db_connection()
@@ -306,6 +326,41 @@ def db_delete_all_tasks() -> int:
     finally:
         conn.close()
 
+def db_duplicate_task(task_id: int) -> Optional[Dict[str, Any]]:
+    """Nhân bản (duplicate) một task có sẵn trong cơ sở dữ liệu."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM tasks WHERE id = ?", (task_id,))
+    row = cursor.fetchone()
+    if not row:
+        conn.close()
+        return None
+    original = dict(row)
+    now_str = datetime.now().isoformat()
+    new_title = f"{original['title']} (Bản sao)"
+    cursor.execute("""
+    INSERT INTO tasks (title, description, status, priority, assignee, deadline, blocker_reason, tags, source_type, website_name, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, (
+        new_title,
+        original.get("description", ""),
+        original.get("status", "TODO"),
+        original.get("priority", "MEDIUM"),
+        original.get("assignee", "Developer"),
+        original.get("deadline", ""),
+        original.get("blocker_reason", ""),
+        original.get("tags", ""),
+        original.get("source_type", "MANUAL"),
+        original.get("website_name", ""),
+        now_str,
+        now_str
+    ))
+    new_id = cursor.lastrowid
+    conn.commit()
+    conn.close()
+    return db_get_task_by_id(new_id)
+
+
 
 def db_add_daily_note(content: str, author: str = "Developer", summary: str = "") -> Dict[str, Any]:
     conn = get_db_connection()
@@ -393,16 +448,57 @@ def db_get_chat_history(limit: int = 40) -> List[Dict[str, Any]]:
     conn.close()
     return rows
 
+def db_delete_last_chat_message(role: Optional[str] = None) -> bool:
+    """Xóa tin nhắn gần nhất trong chat_history (hỗ trợ hủy bỏ khi dev submit nhầm)."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    if role:
+        cursor.execute("SELECT id FROM chat_history WHERE role = ? ORDER BY id DESC LIMIT 1", (role,))
+    else:
+        cursor.execute("SELECT id FROM chat_history ORDER BY id DESC LIMIT 1")
+    row = cursor.fetchone()
+    if not row:
+        conn.close()
+        return False
+    msg_id = row["id"] if isinstance(row, sqlite3.Row) else row[0]
+    cursor.execute("DELETE FROM chat_history WHERE id = ?", (msg_id,))
+    conn.commit()
+    conn.close()
+    return True
+
 # ==========================================
 # PROJECTS & SCOPE CHANGE NOTES (PRESERVE ORIGINAL TIMELINE)
 # ==========================================
-def db_get_all_projects() -> List[Dict[str, Any]]:
+def db_get_all_projects(storage_tier: Optional[str] = None) -> List[Dict[str, Any]]:
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM projects ORDER BY id DESC")
+    if storage_tier:
+        cursor.execute("SELECT * FROM projects WHERE UPPER(storage_tier) = ? ORDER BY id DESC", (storage_tier.strip().upper(),))
+    else:
+        cursor.execute("SELECT * FROM projects ORDER BY id DESC")
     rows = [dict(r) for r in cursor.fetchall()]
     conn.close()
     return rows
+
+def db_get_project_by_id(project_id: int) -> Optional[Dict[str, Any]]:
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM projects WHERE id = ?", (project_id,))
+    row = cursor.fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+def db_get_project_by_name(project_name: str) -> Optional[Dict[str, Any]]:
+    clean = project_name.strip()
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM projects WHERE name = ? COLLATE NOCASE", (clean,))
+    row = cursor.fetchone()
+    if not row:
+        cursor.execute("SELECT * FROM projects WHERE name LIKE ? ORDER BY length(name) ASC LIMIT 1", (f"%{clean}%",))
+        row = cursor.fetchone()
+    conn.close()
+    return dict(row) if row else None
 
 def db_create_project(
     name: str,
@@ -411,27 +507,34 @@ def db_create_project(
     status: str = "IN_PROGRESS",
     start_date: str = "",
     target_deadline: str = "",
-    phases_json: str = "[]"
+    phases_json: str = "[]",
+    storage_tier: str = "HOT"
 ) -> Dict[str, Any]:
-    """Tạo hoặc cập nhật dự án với WBS các giai đoạn và hạn chót."""
+    """Tạo hoặc cập nhật dự án với WBS các giai đoạn, hạn chót và phân vùng lưu trữ."""
     conn = get_db_connection()
     cursor = conn.cursor()
     now_str = datetime.now().isoformat()
+    clean_tier = (storage_tier or "HOT").strip().upper()
+    if clean_tier not in ("HOT", "COLD"):
+        clean_tier = "HOT"
 
-    cursor.execute("SELECT id FROM projects WHERE name = ?", (name,))
+    cursor.execute("SELECT id, storage_tier FROM projects WHERE name = ?", (name,))
     existing = cursor.fetchone()
     if existing:
         p_id = existing["id"] if isinstance(existing, sqlite3.Row) else existing[0]
+        # Giữ nguyên storage_tier hiện tại nếu không chỉ định rõ thay đổi
+        current_tier = (existing["storage_tier"] if isinstance(existing, sqlite3.Row) else existing[1]) or clean_tier
+        target_tier = clean_tier if storage_tier != "HOT" else current_tier
         cursor.execute("""
         UPDATE projects
-        SET status = ?, timeline_doc = ?, plan_summary = ?, start_date = ?, target_deadline = ?, phases_json = ?
+        SET status = ?, timeline_doc = ?, plan_summary = ?, start_date = ?, target_deadline = ?, phases_json = ?, storage_tier = ?
         WHERE id = ?
-        """, (status, timeline_doc, plan_summary, start_date, target_deadline, phases_json, p_id))
+        """, (status, timeline_doc, plan_summary, start_date, target_deadline, phases_json, target_tier, p_id))
     else:
         cursor.execute("""
-        INSERT INTO projects (name, status, timeline_doc, plan_summary, start_date, target_deadline, phases_json, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        """, (name, status, timeline_doc, plan_summary, start_date, target_deadline, phases_json, now_str))
+        INSERT INTO projects (name, status, timeline_doc, plan_summary, start_date, target_deadline, phases_json, storage_tier, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (name, status, timeline_doc, plan_summary, start_date, target_deadline, phases_json, clean_tier, now_str))
         p_id = cursor.lastrowid
 
     conn.commit()
@@ -439,6 +542,31 @@ def db_create_project(
     row = dict(cursor.fetchone())
     conn.close()
     return row
+
+def db_update_project_storage_tier(project_id: int, storage_tier: str) -> Optional[Dict[str, Any]]:
+    """Cập nhật phân vùng lưu trữ cho dự án (HOT hoặc COLD). Dev có thể chuyển tùy ý."""
+    tier = (storage_tier or "").strip().upper()
+    if tier not in ("HOT", "COLD"):
+        raise ValueError(f"Phân vùng không hợp lệ: '{storage_tier}'. Vui lòng chọn 'HOT' hoặc 'COLD'.")
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id FROM projects WHERE id = ?", (project_id,))
+    if not cursor.fetchone():
+        conn.close()
+        return None
+    cursor.execute("UPDATE projects SET storage_tier = ? WHERE id = ?", (tier, project_id))
+    conn.commit()
+    cursor.execute("SELECT * FROM projects WHERE id = ?", (project_id,))
+    row = dict(cursor.fetchone())
+    conn.close()
+    return row
+
+def db_update_project_storage_tier_by_name(project_name: str, storage_tier: str) -> Optional[Dict[str, Any]]:
+    """Cập nhật phân vùng lưu trữ theo tên dự án."""
+    proj = db_get_project_by_name(project_name)
+    if not proj:
+        return None
+    return db_update_project_storage_tier(proj["id"], storage_tier)
 
 def db_add_change_note(
     project_id: Optional[int],
@@ -485,4 +613,185 @@ def db_get_change_notes(project_id: Optional[int] = None, limit: int = 50) -> Li
     rows = [dict(r) for r in cursor.fetchall()]
     conn.close()
     return rows
+
+def db_delete_project(project_id: int, delete_tasks: bool = False) -> bool:
+    """Xóa dự án khỏi cơ sở dữ liệu SQLite kèm theo change notes liên quan."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM projects WHERE id = ?", (project_id,))
+    row = cursor.fetchone()
+    if not row:
+        conn.close()
+        return False
+    p_name = row["name"]
+    cursor.execute("DELETE FROM projects WHERE id = ?", (project_id,))
+    cursor.execute("DELETE FROM change_notes WHERE project_id = ? OR project_name = ?", (project_id, p_name))
+    # Update document references
+    cursor.execute("UPDATE documents SET scope_type = 'GENERAL', project_name = '' WHERE project_name = ?", (p_name,))
+    if delete_tasks:
+        cursor.execute("DELETE FROM tasks WHERE website_name = ? OR (source_type = 'PROJECT_NEW' AND title LIKE ?)", (p_name, f"[{p_name}]%"))
+    conn.commit()
+    conn.close()
+    return True
+
+def db_delete_project_by_name(project_name: str, delete_tasks: bool = False) -> bool:
+    """Xóa dự án theo tên."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id FROM projects WHERE name = ? OR name LIKE ?", (project_name, f"%{project_name}%"))
+    row = cursor.fetchone()
+    if not row:
+        conn.close()
+        return False
+    p_id = row["id"] if isinstance(row, sqlite3.Row) else row[0]
+    conn.close()
+    return db_delete_project(p_id, delete_tasks=delete_tasks)
+
+# ==========================================
+# REGISTERED SITES & SCOPE DISCOVERY
+# ==========================================
+def db_get_registered_sites() -> List[str]:
+    """Lấy danh sách tên tất cả các site / dự án đang được quản lý trong hệ thống."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    sites = set()
+    try:
+        cursor.execute("SELECT name FROM projects")
+        for r in cursor.fetchall():
+            n = (r["name"] if isinstance(r, sqlite3.Row) else r[0]) or ""
+            if n.strip():
+                sites.add(n.strip())
+        cursor.execute("SELECT DISTINCT website_name FROM tasks WHERE website_name != '' AND website_name IS NOT NULL")
+        for r in cursor.fetchall():
+            w = (r["website_name"] if isinstance(r, sqlite3.Row) else r[0]) or ""
+            if w.strip():
+                sites.add(w.strip())
+    finally:
+        conn.close()
+    return sorted(list(sites))
+
+# ==========================================
+# DOCUMENT KNOWLEDGE BASE & SCOPE MANAGEMENT (GENERAL vs PROJECT)
+# ==========================================
+def db_get_all_documents() -> List[Dict[str, Any]]:
+    """Lấy danh sách tất cả tài liệu trong cơ sở dữ liệu."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM documents ORDER BY id DESC")
+    rows = [dict(r) for r in cursor.fetchall()]
+    conn.close()
+    return rows
+
+def db_get_document_by_filename(filename: str) -> Optional[Dict[str, Any]]:
+    clean_name = os.path.basename(filename.replace("\\", "/"))
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM documents WHERE filename = ? OR filename = ? OR filename LIKE ?", (filename, clean_name, f"%{clean_name}%"))
+    row = cursor.fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+def db_upsert_document(
+    filename: str,
+    file_path: str,
+    scope_type: str = "GENERAL",
+    project_name: str = "",
+    size_kb: float = 0.0
+) -> Dict[str, Any]:
+    """Tạo hoặc cập nhật phân loại tài liệu (Kỹ thuật chung hoặc Dự án riêng)."""
+    clean_name = os.path.basename(filename.replace("\\", "/"))
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    now_str = datetime.now().isoformat()
+    cursor.execute("SELECT id FROM documents WHERE filename = ? OR filename = ?", (filename, clean_name))
+    row = cursor.fetchone()
+    if row:
+        doc_id = row["id"] if isinstance(row, sqlite3.Row) else row[0]
+        cursor.execute("""
+        UPDATE documents
+        SET file_path = ?, scope_type = ?, project_name = ?, size_kb = ?, updated_at = ?
+        WHERE id = ?
+        """, (file_path, scope_type.upper(), project_name, size_kb, now_str, doc_id))
+    else:
+        cursor.execute("""
+        INSERT INTO documents (filename, file_path, scope_type, project_name, size_kb, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (clean_name, file_path, scope_type.upper(), project_name, size_kb, now_str, now_str))
+        doc_id = cursor.lastrowid
+    conn.commit()
+    cursor.execute("SELECT * FROM documents WHERE id = ?", (doc_id,))
+    res = dict(cursor.fetchone())
+    conn.close()
+    return res
+
+def db_update_document_scope(filename: str, scope_type: str, project_name: str = "") -> Optional[Dict[str, Any]]:
+    """Chuyển đổi phạm vi tài liệu: GENERAL (Dự án chung) hoặc PROJECT (Dự án riêng)."""
+    clean_name = os.path.basename(filename.replace("\\", "/"))
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    now_str = datetime.now().isoformat()
+    cursor.execute("SELECT id FROM documents WHERE filename = ? OR filename = ?", (filename, clean_name))
+    row = cursor.fetchone()
+    if not row:
+        conn.close()
+        return None
+    doc_id = row["id"] if isinstance(row, sqlite3.Row) else row[0]
+    final_scope = scope_type.upper()
+    final_project = project_name.strip() if final_scope == "PROJECT" else ""
+    cursor.execute("""
+    UPDATE documents
+    SET scope_type = ?, project_name = ?, updated_at = ?
+    WHERE id = ?
+    """, (final_scope, final_project, now_str, doc_id))
+    conn.commit()
+    cursor.execute("SELECT * FROM documents WHERE id = ?", (doc_id,))
+    res = dict(cursor.fetchone())
+    conn.close()
+    return res
+
+def db_delete_document(filename: str) -> bool:
+    clean_name = os.path.basename(filename.replace("\\", "/"))
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM documents WHERE filename = ? OR filename = ?", (filename, clean_name))
+    affected = cursor.rowcount
+    conn.commit()
+    conn.close()
+    return affected > 0
+
+def db_sync_documents_from_disk():
+    """Tự động đồng bộ các file tài liệu trong thư mục data/ vào SQLite documents table."""
+    supported_exts = {".md", ".txt", ".pdf", ".xlsx", ".xls", ".csv"}
+    search_dirs = [settings.DATA_DIR]
+    docs_sub = settings.DATA_DIR / "docs"
+    if docs_sub.exists():
+        search_dirs.append(docs_sub)
+
+    seen = set()
+    for directory in search_dirs:
+        if not directory.exists():
+            continue
+        for item in directory.glob("*"):
+            if item.is_file() and item.suffix.lower() in supported_exts:
+                if item.name not in seen:
+                    seen.add(item.name)
+                    existing = db_get_document_by_filename(item.name)
+                    if not existing:
+                        size_kb = round(item.stat().st_size / 1024, 1)
+                        name_lower = item.name.lower()
+                        if any(kw in name_lower for kw in ["report", "excel", "template", "kig", "sis", "svis"]):
+                            scope = "PROJECT"
+                            proj = "SIS / SVIS - Convert Elementor to Hand-Code" if ("sis" in name_lower or "svis" in name_lower) else ""
+                        else:
+                            scope = "GENERAL"
+                            proj = ""
+                        db_upsert_document(
+                            filename=item.name,
+                            file_path=str(item),
+                            scope_type=scope,
+                            project_name=proj,
+                            size_kb=size_kb
+                        )
+
+
 
