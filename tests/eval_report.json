@@ -1,0 +1,162 @@
+{
+  "timestamp": "2026-10-19T17:53:21Z",
+  "summary": {
+    "total_tests": 10,
+    "passed": 10,
+    "failed": 0,
+    "pass_rate_percent": 100.0,
+    "guardrail_accuracy_percent": 100.0,
+    "tool_calling_accuracy_percent": 100.0,
+    "avg_latency_ms": 3306.78,
+    "total_tokens": 0,
+    "total_cost_usd": 0.0
+  },
+  "results": [
+    {
+      "id": "tc_01",
+      "category": "site_guardrail",
+      "description": "Từ chối yêu cầu hỏi thời tiết ngoài phạm vi dự án",
+      "input": "Thời tiết hôm nay ở Hà Nội thế nào?",
+      "passed": true,
+      "failure_reasons": [],
+      "model": "site-scope-guardrail",
+      "latency_ms": 9.25,
+      "tokens": 0,
+      "cost_usd": 0.0,
+      "executed_tools": []
+    },
+    {
+      "id": "tc_02",
+      "category": "site_guardrail",
+      "description": "Từ chối yêu cầu nấu ăn cá nhân ngoài phạm vi dự án",
+      "input": "Chỉ mình công thức nấu món phở bò truyền thống ngon với",
+      "passed": true,
+      "failure_reasons": [],
+      "model": "site-scope-guardrail",
+      "latency_ms": 3.36,
+      "tokens": 0,
+      "cost_usd": 0.0,
+      "executed_tools": []
+    },
+    {
+      "id": "tc_03",
+      "category": "task_extraction",
+      "description": "Trích xuất task từ tin nhắn Teams có deadline và tên site",
+      "input": "Dự án SIS Website: deadline 25/10/2026, nội dung: fix lỗi giao diện hiển thị trên mobile",
+      "passed": true,
+      "failure_reasons": [],
+      "model": "rule-based-fallback",
+      "latency_ms": 4130.8,
+      "tokens": 0,
+      "cost_usd": 0.0,
+      "executed_tools": [
+        "create_task"
+      ]
+    },
+    {
+      "id": "tc_04",
+      "category": "task_extraction",
+      "description": "Bóc tách task clone site và cắt gọt nội dung",
+      "input": "project SVIS Vạn Phúc, deadline ngày 23/10/2026, nội dung: clone từ SIS Vạn Phúc và cắt gọt nội dung",
+      "passed": true,
+      "failure_reasons": [],
+      "model": "rule-based-fallback",
+      "latency_ms": 4113.0,
+      "tokens": 0,
+      "cost_usd": 0.0,
+      "executed_tools": [
+        "create_task"
+      ]
+    },
+    {
+      "id": "tc_05",
+      "category": "wbs_planning",
+      "description": "Lập kế hoạch WBS 4 giai đoạn cho dự án mới",
+      "input": "Lập kế hoạch WBS cho dự án mới Cổng thông tin Tuyển sinh KIK Website",
+      "passed": true,
+      "failure_reasons": [],
+      "model": "rule-based-fallback",
+      "latency_ms": 4192.62,
+      "tokens": 0,
+      "cost_usd": 0.0,
+      "executed_tools": [
+        "plan_wbs"
+      ]
+    },
+    {
+      "id": "tc_06",
+      "category": "change_request",
+      "description": "Ghi nhận Change Request từ cuộc họp bảo toàn timeline gốc",
+      "input": "Họp thay đổi specs cho SIS Website: khách yêu cầu phát sinh thêm tích hợp cổng thanh toán MoMo",
+      "passed": true,
+      "failure_reasons": [],
+      "model": "rule-based-fallback",
+      "latency_ms": 4140.39,
+      "tokens": 0,
+      "cost_usd": 0.0,
+      "executed_tools": [
+        "log_change_request"
+      ]
+    },
+    {
+      "id": "tc_07",
+      "category": "blocker_logging",
+      "description": "Ghi nhận blocker kỹ thuật vào hệ thống",
+      "input": "Hôm nay bị nghẽn blocker ở cấu hình SSL certificate cho KIG Website",
+      "passed": true,
+      "failure_reasons": [],
+      "model": "rule-based-fallback",
+      "latency_ms": 4151.29,
+      "tokens": 0,
+      "cost_usd": 0.0,
+      "executed_tools": [
+        "record_daily_note",
+        "create_task"
+      ]
+    },
+    {
+      "id": "tc_08",
+      "category": "daily_done_logging",
+      "description": "Ghi nhận hoàn thành công việc hằng ngày",
+      "input": "Hôm nay đã làm xong tính năng xuất file Excel cho SIS Website",
+      "passed": true,
+      "failure_reasons": [],
+      "model": "rule-based-fallback",
+      "latency_ms": 4128.51,
+      "tokens": 0,
+      "cost_usd": 0.0,
+      "executed_tools": [
+        "record_daily_note",
+        "create_task"
+      ]
+    },
+    {
+      "id": "tc_09",
+      "category": "monthly_report",
+      "description": "Hỏi quy trình xuất báo cáo công việc tháng",
+      "input": "Hướng dẫn mình cách xuất báo cáo tháng công việc đem nộp sếp",
+      "passed": true,
+      "failure_reasons": [],
+      "model": "rule-based-fallback",
+      "latency_ms": 4100.85,
+      "tokens": 0,
+      "cost_usd": 0.0,
+      "executed_tools": []
+    },
+    {
+      "id": "tc_10",
+      "category": "project_deletion",
+      "description": "Xóa dự án khỏi hệ thống",
+      "input": "Xóa dự án Test Project Cũ khỏi hệ thống",
+      "passed": true,
+      "failure_reasons": [],
+      "model": "rule-based-fallback",
+      "latency_ms": 4097.76,
+      "tokens": 0,
+      "cost_usd": 0.0,
+      "executed_tools": [
+        "delete_project"
+      ]
+    }
+  ]
+}

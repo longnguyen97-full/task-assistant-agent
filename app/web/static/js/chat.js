@@ -36,7 +36,7 @@ let currentChatAbortController = null;
 let lastSubmittedMessageText = '';
 let lastSubmittedUserWrapper = null;
 
-function appendChatMessage(role, content, toolCalls = [], timestamp = null) {
+function appendChatMessage(role, content, toolCalls = [], timestamp = null, metrics = null) {
   const chatMessages = document.getElementById('chatMessages');
   if (!chatMessages) return;
 
@@ -71,6 +71,23 @@ function appendChatMessage(role, content, toolCalls = [], timestamp = null) {
     `).join('');
   }
 
+  let telemetryHtml = '';
+  if (!isUser && metrics && (metrics.latency_ms || metrics.total_tokens || metrics.model)) {
+    const latSec = (metrics.latency_ms ? (metrics.latency_ms / 1000).toFixed(2) : '0.00') + 's';
+    const tokCount = (metrics.total_tokens || 0).toLocaleString();
+    const costUsd = metrics.cost_usd ? `$${metrics.cost_usd.toFixed(5)}` : '$0.00';
+    const modelLabel = metrics.model || 'Agent';
+
+    telemetryHtml = `
+      <div class="msg-telemetry-badge">
+        <span class="telemetry-pill lat" title="Tổng độ trễ xử lý (Latency)"><i class="fa-solid fa-bolt"></i> ${latSec}</span>
+        <span class="telemetry-pill tok" title="Tổng Tokens (Input + Output)"><i class="fa-solid fa-coins"></i> ${tokCount} tok</span>
+        <span class="telemetry-pill cost" title="Ước tính chi phí API"><i class="fa-solid fa-dollar-sign"></i> ${costUsd}</span>
+        <span class="telemetry-pill model" title="Mô hình LLM"><i class="fa-solid fa-microchip"></i> ${modelLabel}</span>
+      </div>
+    `;
+  }
+
   const parsedContent = (typeof marked !== 'undefined') ? marked.parse(content || '') : content;
 
   wrapper.innerHTML = `
@@ -84,6 +101,7 @@ function appendChatMessage(role, content, toolCalls = [], timestamp = null) {
       <div class="msg-content markdown-body">
         ${parsedContent}
       </div>
+      ${telemetryHtml}
     </div>
   `;
 
@@ -245,7 +263,7 @@ async function handleSendMessage(messageText) {
     } else {
       const data = await res.json();
       if (!data.cancelled) {
-        appendChatMessage('assistant', data.content, data.tool_calls);
+        appendChatMessage('assistant', data.content, data.tool_calls, null, data.metrics);
         if (window.loadTasks) window.loadTasks();
         if (window.loadDailyNotes) window.loadDailyNotes();
         if (window.updateStatsAndProgress) window.updateStatsAndProgress();

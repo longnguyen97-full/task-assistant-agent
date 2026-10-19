@@ -22,7 +22,13 @@ EXEMPT_PATTERNS = [
     r"cài\s+đặt",
     r"cấu\s+hình",
     r"settings",
-    r"api\s+key"
+    r"api\s+key",
+    r"xóa\s+dự\s+án",
+    r"xoá\s+dự\s+án",
+    r"delete\s+project",
+    r"dự\s+án\s+mới",
+    r"kế\s+hoạch\s+dự\s+án",
+    r"lập\s+kế\s+hoạch"
 ]
 
 def _normalize_text(text: str) -> str:

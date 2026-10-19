@@ -1,0 +1,82 @@
+[
+  {
+    "id": "tc_01",
+    "category": "site_guardrail",
+    "description": "Từ chối yêu cầu hỏi thời tiết ngoài phạm vi dự án",
+    "input": "Thời tiết hôm nay ở Hà Nội thế nào?",
+    "expected_out_of_scope": true
+  },
+  {
+    "id": "tc_02",
+    "category": "site_guardrail",
+    "description": "Từ chối yêu cầu nấu ăn cá nhân ngoài phạm vi dự án",
+    "input": "Chỉ mình công thức nấu món phở bò truyền thống ngon với",
+    "expected_out_of_scope": true
+  },
+  {
+    "id": "tc_03",
+    "category": "task_extraction",
+    "description": "Trích xuất task từ tin nhắn Teams có deadline và tên site",
+    "input": "Dự án SIS Website: deadline 25/10/2026, nội dung: fix lỗi giao diện hiển thị trên mobile",
+    "expected_out_of_scope": false,
+    "expected_tool": "create_task",
+    "expected_website": "SIS Website"
+  },
+  {
+    "id": "tc_04",
+    "category": "task_extraction",
+    "description": "Bóc tách task clone site và cắt gọt nội dung",
+    "input": "project SVIS Vạn Phúc, deadline ngày 23/10/2026, nội dung: clone từ SIS Vạn Phúc và cắt gọt nội dung",
+    "expected_out_of_scope": false,
+    "expected_tool": "create_task",
+    "expected_website": "SVIS Vạn Phúc"
+  },
+  {
+    "id": "tc_05",
+    "category": "wbs_planning",
+    "description": "Lập kế hoạch WBS 4 giai đoạn cho dự án mới",
+    "input": "Lập kế hoạch WBS cho dự án mới Cổng thông tin Tuyển sinh KIK Website",
+    "expected_out_of_scope": false,
+    "expected_tool": "plan_wbs"
+  },
+  {
+    "id": "tc_06",
+    "category": "change_request",
+    "description": "Ghi nhận Change Request từ cuộc họp bảo toàn timeline gốc",
+    "input": "Họp thay đổi specs cho SIS Website: khách yêu cầu phát sinh thêm tích hợp cổng thanh toán MoMo",
+    "expected_out_of_scope": false,
+    "expected_tool": "log_change_request"
+  },
+  {
+    "id": "tc_07",
+    "category": "blocker_logging",
+    "description": "Ghi nhận blocker kỹ thuật vào hệ thống",
+    "input": "Hôm nay bị nghẽn blocker ở cấu hình SSL certificate cho KIG Website",
+    "expected_out_of_scope": false,
+    "expected_tool": "create_task"
+  },
+  {
+    "id": "tc_08",
+    "category": "daily_done_logging",
+    "description": "Ghi nhận hoàn thành công việc hằng ngày",
+    "input": "Hôm nay đã làm xong tính năng xuất file Excel cho SIS Website",
+    "expected_out_of_scope": false,
+    "expected_tool": "create_task"
+  },
+  {
+    "id": "tc_09",
+    "category": "monthly_report",
+    "description": "Hỏi quy trình xuất báo cáo công việc tháng",
+    "input": "Hướng dẫn mình cách xuất báo cáo tháng công việc đem nộp sếp",
+    "expected_out_of_scope": false,
+    "expected_keyword_in_content": "báo cáo"
+  },
+  {
+    "id": "tc_10",
+    "category": "project_deletion",
+    "description": "Xóa dự án khỏi hệ thống",
+    "input": "Xóa dự án Test Project Cũ khỏi hệ thống",
+    "expected_out_of_scope": false,
+    "expected_tool": "delete_project"
+  }
+]
