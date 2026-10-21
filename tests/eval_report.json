@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-10-19T17:53:21Z",
+  "timestamp": "2026-10-21T09:02:53Z",
   "summary": {
     "total_tests": 10,
     "passed": 10,
@@ -7,8 +7,8 @@
     "pass_rate_percent": 100.0,
     "guardrail_accuracy_percent": 100.0,
     "tool_calling_accuracy_percent": 100.0,
-    "avg_latency_ms": 3306.78,
-    "total_tokens": 0,
+    "avg_latency_ms": 110666.36,
+    "total_tokens": 30566,
     "total_cost_usd": 0.0
   },
   "results": [
@@ -20,7 +20,7 @@
       "passed": true,
       "failure_reasons": [],
       "model": "site-scope-guardrail",
-      "latency_ms": 9.25,
+      "latency_ms": 11.72,
       "tokens": 0,
       "cost_usd": 0.0,
       "executed_tools": []
@@ -33,7 +33,7 @@
       "passed": true,
       "failure_reasons": [],
       "model": "site-scope-guardrail",
-      "latency_ms": 3.36,
+      "latency_ms": 5.65,
       "tokens": 0,
       "cost_usd": 0.0,
       "executed_tools": []
@@ -45,9 +45,9 @@
       "input": "Dự án SIS Website: deadline 25/10/2026, nội dung: fix lỗi giao diện hiển thị trên mobile",
       "passed": true,
       "failure_reasons": [],
-      "model": "rule-based-fallback",
-      "latency_ms": 4130.8,
-      "tokens": 0,
+      "model": "qwen2.5:7b",
+      "latency_ms": 77588.92,
+      "tokens": 3153,
       "cost_usd": 0.0,
       "executed_tools": [
         "create_task"
@@ -60,9 +60,9 @@
       "input": "project SVIS Vạn Phúc, deadline ngày 23/10/2026, nội dung: clone từ SIS Vạn Phúc và cắt gọt nội dung",
       "passed": true,
       "failure_reasons": [],
-      "model": "rule-based-fallback",
-      "latency_ms": 4113.0,
-      "tokens": 0,
+      "model": "qwen2.5:7b",
+      "latency_ms": 76326.84,
+      "tokens": 3199,
       "cost_usd": 0.0,
       "executed_tools": [
         "create_task"
@@ -75,9 +75,9 @@
       "input": "Lập kế hoạch WBS cho dự án mới Cổng thông tin Tuyển sinh KIK Website",
       "passed": true,
       "failure_reasons": [],
-      "model": "rule-based-fallback",
-      "latency_ms": 4192.62,
-      "tokens": 0,
+      "model": "qwen2.5:7b",
+      "latency_ms": 488583.11,
+      "tokens": 7586,
       "cost_usd": 0.0,
       "executed_tools": [
         "plan_wbs"
@@ -90,11 +90,12 @@
       "input": "Họp thay đổi specs cho SIS Website: khách yêu cầu phát sinh thêm tích hợp cổng thanh toán MoMo",
       "passed": true,
       "failure_reasons": [],
-      "model": "rule-based-fallback",
-      "latency_ms": 4140.39,
-      "tokens": 0,
+      "model": "qwen2.5:7b",
+      "latency_ms": 89391.63,
+      "tokens": 3681,
       "cost_usd": 0.0,
       "executed_tools": [
+        "log_change_request",
         "log_change_request"
       ]
     },
@@ -105,13 +106,13 @@
       "input": "Hôm nay bị nghẽn blocker ở cấu hình SSL certificate cho KIG Website",
       "passed": true,
       "failure_reasons": [],
-      "model": "rule-based-fallback",
-      "latency_ms": 4151.29,
-      "tokens": 0,
+      "model": "qwen2.5:7b",
+      "latency_ms": 102897.27,
+      "tokens": 3361,
       "cost_usd": 0.0,
       "executed_tools": [
-        "record_daily_note",
-        "create_task"
+        "create_task",
+        "record_daily_note"
       ]
     },
     {
@@ -121,12 +122,11 @@
       "input": "Hôm nay đã làm xong tính năng xuất file Excel cho SIS Website",
       "passed": true,
       "failure_reasons": [],
-      "model": "rule-based-fallback",
-      "latency_ms": 4128.51,
-      "tokens": 0,
+      "model": "qwen2.5:7b",
+      "latency_ms": 73158.91,
+      "tokens": 3227,
       "cost_usd": 0.0,
       "executed_tools": [
-        "record_daily_note",
         "create_task"
       ]
     },
@@ -137,11 +137,15 @@
       "input": "Hướng dẫn mình cách xuất báo cáo tháng công việc đem nộp sếp",
       "passed": true,
       "failure_reasons": [],
-      "model": "rule-based-fallback",
-      "latency_ms": 4100.85,
-      "tokens": 0,
+      "model": "qwen2.5:7b",
+      "latency_ms": 159975.61,
+      "tokens": 3798,
       "cost_usd": 0.0,
-      "executed_tools": []
+      "executed_tools": [
+        "create_task",
+        "record_daily_note",
+        "export_monthly_report"
+      ]
     },
     {
       "id": "tc_10",
@@ -150,9 +154,9 @@
       "input": "Xóa dự án Test Project Cũ khỏi hệ thống",
       "passed": true,
       "failure_reasons": [],
-      "model": "rule-based-fallback",
-      "latency_ms": 4097.76,
-      "tokens": 0,
+      "model": "qwen2.5:7b",
+      "latency_ms": 38723.9,
+      "tokens": 2561,
       "cost_usd": 0.0,
       "executed_tools": [
         "delete_project"

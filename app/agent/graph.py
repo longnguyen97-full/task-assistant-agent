@@ -5,7 +5,8 @@ Includes real-time performance telemetry (Latency, Token Usage, Cost Estimation)
 """
 import json
 import time
-from typing import Dict, Any, List, Optional, Literal
+import asyncio
+from typing import Dict, Any, List, Optional, Literal, AsyncGenerator
 
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage, ToolMessage
 from langgraph.graph import StateGraph, START, END
@@ -23,7 +24,7 @@ except ImportError:
 from app.config import settings
 from app.agent.state import AgentState
 from app.agent.prompts import REACT_SYSTEM_PROMPT, OLLAMA_SYSTEM_PROMPT
-from app.agent.tools import ALL_TOOLS, TOOLS_REGISTRY
+from app.agent.tools import ALL_TOOLS, TOOLS_REGISTRY, get_relevant_tools
 from app.agent.guardrails import check_site_scope
 from app.agent.fallback import heuristic_fallback_agent, synthesize_tool_summary
 from app.agent.telemetry import extract_token_usage, calculate_cost, format_telemetry_badge
@@ -168,7 +169,8 @@ def reasoning_node(state: AgentState) -> Dict[str, Any]:
     if llm is None:
         return {"fallback_triggered": True}
 
-    llm_with_tools = llm.bind_tools(ALL_TOOLS)
+    active_tools = get_relevant_tools(user_message=state["user_message"], provider=provider)
+    llm_with_tools = llm.bind_tools(active_tools)
     messages = state["messages"]
     metrics = dict(state.get("metrics", {}))
 
@@ -196,9 +198,12 @@ def reasoning_node(state: AgentState) -> Dict[str, Any]:
         "metrics": metrics
     }
 
+    extracted_content = _extract_text(ai_response.content).strip()
     if not ai_response.tool_calls:
-        # LLM đã có câu trả lời trực tiếp mà không cần gọi thêm tool
-        updates["final_content"] = _extract_text(ai_response.content)
+        if not extracted_content:
+            print("[WARN] LLM returned completely empty text and no tool calls. Triggering fallback.")
+            return {"fallback_triggered": True}
+        updates["final_content"] = extracted_content
 
     return updates
 
@@ -355,7 +360,7 @@ react_agent_graph = build_react_agent_graph()
 # PUBLIC EXECUTION CONTROLLER
 # ============================================================================
 
-def execute_react_agent(user_message: str, author: str = "Developer") -> Dict[str, Any]:
+def execute_react_agent(user_message: str, author: str = "Developer", save_history: bool = True) -> Dict[str, Any]:
     """Single-Agent ReAct Workflow Controller using LangGraph.
     
     Luồng thực thi qua StateGraph:
@@ -367,7 +372,8 @@ def execute_react_agent(user_message: str, author: str = "Developer") -> Dict[st
     6. Đo lường Telemetry: Latency, Token Usage, Cost.
     """
     reset_agent_cancellation()
-    db_add_chat_message(role="user", content=user_message)
+    if save_history:
+        db_add_chat_message(role="user", content=user_message)
 
     start_perf = time.perf_counter()
 
@@ -431,11 +437,12 @@ def execute_react_agent(user_message: str, author: str = "Developer") -> Dict[st
     tool_calls = final_state.get("executed_tool_calls", [])
 
     # Lưu lịch sử tin nhắn của Assistant
-    db_add_chat_message(
-        role="assistant",
-        content=content,
-        tool_calls=json.dumps(tool_calls, ensure_ascii=False) if tool_calls else ""
-    )
+    if save_history:
+        db_add_chat_message(
+            role="assistant",
+            content=content,
+            tool_calls=json.dumps(tool_calls, ensure_ascii=False) if tool_calls else ""
+        )
 
     # Ghi nhận Telemetry log vào cơ sở dữ liệu
     try:
@@ -479,3 +486,179 @@ def execute_react_agent(user_message: str, author: str = "Developer") -> Dict[st
 
 # Backward compatibility alias
 execute_chat = execute_react_agent
+
+# ============================================================================
+# SERVER-SENT EVENTS (SSE) STREAMING CONTROLLER
+# ============================================================================
+
+async def stream_react_agent(user_message: str, author: str = "Developer") -> AsyncGenerator[str, None]:
+    """Server-Sent Events (SSE) Streaming Controller cho Single-Agent.
+    Phát ra các event có cấu trúc theo chuẩn SSE:
+    - event: status     -> Cập nhật bước xử lý (Guardrail, Phân tích, Chọn tool...)
+    - event: tool_start -> Báo hiệu công cụ đang bắt đầu chạy kèm tham số
+    - event: tool_end   -> Báo hiệu công cụ đã hoàn thành
+    - event: token      -> Stream từng token nội dung phản hồi
+    - event: done       -> Hoàn tất phản hồi, chứa metrics & full payload
+    """
+    reset_agent_cancellation()
+    db_add_chat_message(role="user", content=user_message)
+    start_perf = time.perf_counter()
+
+    # 1. BƯỚC 1: GUARDRAIL (Kiểm duyệt phạm vi)
+    yield f"event: status\ndata: {json.dumps({'step': 'guardrail', 'message': '🛡️ Đang kiểm tra phạm vi dự án & Allowed Resources...'}, ensure_ascii=False)}\n\n"
+    await asyncio.sleep(0.04)
+
+    scope_check = check_site_scope(user_message)
+    if not scope_check["allowed"]:
+        refusal = scope_check.get("refusal_message", "Yêu cầu nằm ngoài phạm vi các site/dự án đang quản lý.")
+        db_add_chat_message(role="assistant", content=refusal)
+        total_latency = round((time.perf_counter() - start_perf) * 1000, 2)
+        
+        # Stream text refusal
+        yield f"event: token\ndata: {json.dumps({'token': refusal}, ensure_ascii=False)}\n\n"
+        yield f"event: done\ndata: {json.dumps({'content': refusal, 'tool_calls': [], 'out_of_scope': True, 'registered_sites': scope_check.get('registered_sites', []), 'metrics': {'latency_ms': total_latency, 'model': 'site-scope-guardrail'}}, ensure_ascii=False)}\n\n"
+        return
+
+    # 2. BƯỚC 2: PHÂN TÍCH INTENT & LỌC TOOL PHÙ HỢP (DYNAMIC TOOL PRUNING)
+    matched_site = scope_check.get("matched_site")
+    site_label = f"dự án: {matched_site}" if matched_site else "Allowed Resources"
+    yield f"event: status\ndata: {json.dumps({'step': 'reasoning', 'message': f'🧠 Đang phân tích yêu cầu ({site_label})...'}, ensure_ascii=False)}\n\n"
+    await asyncio.sleep(0.04)
+
+    provider = getattr(settings, "LLM_PROVIDER", "ollama").lower()
+    active_tools = get_relevant_tools(user_message=user_message, provider=provider)
+    tool_names = [t.name for t in active_tools]
+    yield f"event: status\ndata: {json.dumps({'step': 'tools_ready', 'message': f'🛠️ Đã kích hoạt {len(active_tools)} công cụ phù hợp ({', '.join(tool_names[:3])})...'}, ensure_ascii=False)}\n\n"
+    await asyncio.sleep(0.04)
+
+    # 3. BƯỚC 3: SUY LUẬN LLM VÀ GỌI CÔNG CỤ
+    llm, model_name, provider_name = get_configured_llm()
+    executed_tools = []
+    final_content = ""
+    llm_latency_ms = 0.0
+
+    if is_agent_cancelled():
+        yield f"event: done\ndata: {json.dumps({'cancelled': True, 'content': '*(Đã dừng suy nghĩ)*'}, ensure_ascii=False)}\n\n"
+        return
+
+    # Chuẩn bị context messages
+    base_prompt = OLLAMA_SYSTEM_PROMPT if provider == "ollama" else REACT_SYSTEM_PROMPT
+    reg_sites = scope_check.get("registered_sites", [])
+    dynamic_prompt = base_prompt + f"\n\n### 🌐 DANH SÁCH SITE ĐANG QUẢN LÝ:\n{', '.join(reg_sites)}\n"
+    if matched_site:
+        dynamic_prompt += f"-> Site đã xác định: **{matched_site}**\n"
+
+    history = db_get_chat_history(limit=4 if provider == "ollama" else 8)
+    messages = [SystemMessage(content=dynamic_prompt)]
+    for h in history[:-1]:
+        h_text = h["content"]
+        if provider == "ollama" and len(h_text) > 300:
+            h_text = h_text[:300] + "..."
+        if h["role"] == "user":
+            messages.append(HumanMessage(content=h_text))
+        elif h["role"] == "assistant":
+            messages.append(AIMessage(content=h_text))
+    messages.append(HumanMessage(content=f"Developer ({author}): {user_message}"))
+
+    ai_response = None
+    if llm is not None:
+        try:
+            llm_with_tools = llm.bind_tools(active_tools)
+            t_llm = time.perf_counter()
+            ai_response = await asyncio.to_thread(llm_with_tools.invoke, messages)
+            llm_latency_ms = round((time.perf_counter() - t_llm) * 1000, 2)
+        except Exception as e:
+            print(f"[WARN] Streaming LLM Error: {e}, falling back to Heuristic.")
+            ai_response = None
+
+    # Kiểm tra nếu LLM có sinh Tool Calls
+    if ai_response and hasattr(ai_response, "tool_calls") and ai_response.tool_calls:
+        for tc in ai_response.tool_calls:
+            if is_agent_cancelled():
+                yield f"event: done\ndata: {json.dumps({'cancelled': True, 'content': '*(Đã dừng)*'}, ensure_ascii=False)}\n\n"
+                return
+
+            t_name = tc.get("name")
+            t_args = tc.get("args", {})
+            yield f"event: tool_start\ndata: {json.dumps({'name': t_name, 'args': t_args, 'message': f'⚡ Đang thực thi công cụ: {t_name}...'}, ensure_ascii=False)}\n\n"
+
+            t_func = TOOLS_REGISTRY.get(t_name)
+            if t_func:
+                try:
+                    tool_res = await asyncio.to_thread(t_func.invoke, t_args)
+                except Exception as ex:
+                    tool_res = json.dumps({"error": str(ex)}, ensure_ascii=False)
+            else:
+                tool_res = json.dumps({"error": f"Tool '{t_name}' không tồn tại"}, ensure_ascii=False)
+
+            executed_tools.append({"name": t_name, "args": t_args, "result": tool_res})
+            yield f"event: tool_end\ndata: {json.dumps({'name': t_name, 'result': tool_res, 'message': f'✅ Hoàn thành: {t_name}'}, ensure_ascii=False)}\n\n"
+
+        final_content = synthesize_tool_summary(executed_tools, user_message)
+    elif ai_response and _extract_text(ai_response.content).strip():
+        final_content = _extract_text(ai_response.content).strip()
+    else:
+        # Fallback to Heuristic Engine
+        yield f"event: status\ndata: {json.dumps({'step': 'fallback', 'message': '⚡ Kích hoạt Heuristic Intent Engine...'}, ensure_ascii=False)}\n\n"
+        fb_res = heuristic_fallback_agent(user_message=user_message, author=author, start_time=start_perf)
+        final_content = fb_res["content"]
+        executed_tools = fb_res.get("tool_calls", [])
+        model_name = fb_res.get("model", "rule-based-fallback")
+
+    # 4. BƯỚC 4: STREAM NỘI DUNG PHẢN HỒI (TOKEN STREAMING)
+    yield f"event: status\ndata: {json.dumps({'step': 'streaming_content', 'message': '✍️ Đang tổng hợp câu trả lời...'}, ensure_ascii=False)}\n\n"
+
+    chunk_size = 25
+    for i in range(0, len(final_content), chunk_size):
+        if is_agent_cancelled():
+            yield f"event: done\ndata: {json.dumps({'cancelled': True, 'content': final_content[:i]}, ensure_ascii=False)}\n\n"
+            return
+        chunk = final_content[i:i+chunk_size]
+        yield f"event: token\ndata: {json.dumps({'token': chunk}, ensure_ascii=False)}\n\n"
+        await asyncio.sleep(0.015)
+
+    # 5. BƯỚC 5: LƯU TRỮ VÀ HOÀN TẤT
+    total_latency_ms = round((time.perf_counter() - start_perf) * 1000.0, 2)
+    db_add_chat_message(
+        role="assistant",
+        content=final_content,
+        tool_calls=json.dumps(executed_tools, ensure_ascii=False) if executed_tools else ""
+    )
+
+    metrics = {
+        "latency_ms": total_latency_ms,
+        "llm_latency_ms": llm_latency_ms,
+        "tool_latency_ms": 0.0,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": len(final_content.split()) * 2,
+        "cost_usd": 0.0,
+        "provider": provider,
+        "model": model_name or "agent"
+    }
+
+    # Log telemetry
+    try:
+        from app.database import db_log_telemetry
+        executed_tool_names = [t.get("name") for t in executed_tools]
+        db_log_telemetry(
+            user_prompt=user_message,
+            model_name=metrics["model"],
+            provider=provider,
+            latency_ms=total_latency_ms,
+            llm_latency_ms=llm_latency_ms,
+            tool_latency_ms=0.0,
+            input_tokens=0,
+            output_tokens=0,
+            total_tokens=metrics["total_tokens"],
+            cost_usd=0.0,
+            tool_calls_count=len(executed_tools),
+            executed_tools=json.dumps(executed_tool_names, ensure_ascii=False),
+            out_of_scope=False,
+            fallback_triggered=False
+        )
+    except Exception:
+        pass
+
+    yield f"event: done\ndata: {json.dumps({'content': final_content, 'tool_calls': executed_tools, 'metrics': metrics}, ensure_ascii=False)}\n\n"
+

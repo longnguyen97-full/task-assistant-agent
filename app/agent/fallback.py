@@ -66,6 +66,30 @@ def synthesize_tool_summary(tool_calls: List[Dict[str, Any]], user_message: str)
         elif name == "set_project_storage_tier":
             msg = res_obj.get("message", "Đã cập nhật phân vùng lưu trữ dự án.")
             lines.append(f"\n🏷️ **{msg}**")
+        elif name == "search_design_files":
+            status = res_obj.get("status")
+            if status in ("blocked", "inaccessible"):
+                lines.append(f"\n{res_obj.get('message', 'Không thể truy cập đường dẫn thư mục.')}")
+            elif status == "success":
+                matches = res_obj.get("matched_files", [])
+                cnt = res_obj.get("total_matched_files", 0)
+                scanned = res_obj.get("scanned_files_count", 0)
+                folder = res_obj.get("folder_path", "")
+                kws = ", ".join(res_obj.get("extracted_keywords", [])[:8])
+                if matches:
+                    lines.append(f"\n🎯 **Đã tìm thấy {cnt} tệp thiết kế phù hợp** (quét trong số {scanned} tệp .xd tại `{folder}`):")
+                    if kws:
+                        lines.append(f"🔍 *Từ khóa đặc trưng đã trích xuất & đối chiếu:* `{kws}`")
+                    for m in matches:
+                        ab_str = ", ".join(m.get("matched_artboards", [])) if m.get("matched_artboards") else "Toàn bộ tệp"
+                        lines.append(f"\n- 📁 **Tệp tin:** `{m.get('file_name')}` ({m.get('file_size_mb')} MB - Sửa đổi: {m.get('last_modified')})")
+                        lines.append(f"  - 📍 **Đường dẫn:** `{m.get('full_path')}`")
+                        lines.append(f"  - 🎨 **Artboard chứa nội dung:** `{ab_str}`")
+                        lines.append(f"  - 🏷️ **Từ khóa đã khớp ({m.get('matched_keywords_count')}):** `{', '.join(m.get('matched_keywords', []))}`")
+                else:
+                    lines.append(f"\nℹ️ Đã quét {scanned} tệp .xd trong `{folder}` nhưng không tìm thấy nội dung khớp với hình ảnh/từ khóa.")
+            else:
+                lines.append(f"\n⚠️ {res_obj.get('message', 'Lỗi khi quét tìm tệp thiết kế.')}")
 
     return "\n".join(lines)
 
@@ -189,7 +213,54 @@ def heuristic_fallback_agent(user_message: str, author: str = "Developer", start
         tool_calls.append({"name": "log_change_request", "args": {"title": "Thay đổi tính năng"}, "result": json.dumps(cr_res, ensure_ascii=False)})
         response_parts.append("📝 **Đã ghi nhận Change Request vào hệ thống!**\n⚠️ *Lưu ý: Mốc timeline gốc đã được bảo toàn 100% để đối chiếu.*")
 
-    # 6. Daily Progress / Blocker Logging
+    # 6. Search Design Files & Network Folders (.xd / Image / Keywords)
+    elif any(w in msg_lower for w in ["tìm file", "kiếm file", "quét folder", "scan file", "file xd", "kiếm cái file", "tìm trong", "quét"]) or ("\\\\" in user_message and any(w in msg_lower for w in ["tìm", "kiếm", "quét", "hình", "ảnh", "xd"])):
+        # Extract folder path with support for spaces and quotes
+        target_folder = r"\\172.16.44.103\design$"
+        q_match = re.search(r"[\"']([\\\/]{1,2}[^\"']+|[a-zA-Z]:\\[^\"']+)[\"']", user_message)
+        if q_match:
+            target_folder = q_match.group(1).strip()
+        else:
+            prefix_match = re.search(r"(?:trong|ở|tại|folder|đường dẫn)\s+([\\\/]{1,2}[^\n\r,\;]+|[a-zA-Z]:[\\\/][^\n\r,\;]+)", user_message, re.IGNORECASE)
+            if prefix_match:
+                cand = prefix_match.group(1).strip().rstrip(".,;")
+                cand = re.split(r"\s+(?:có|chứa|để|với|tìm|file|hãy)\b", cand, flags=re.IGNORECASE)[0].strip()
+                target_folder = cand
+            else:
+                m = re.search(r"([\\\/]{1,2}[^\n\r,\;]+|[a-zA-Z]:\\[^\n\r,\;]+)", user_message)
+                if m:
+                    cand = m.group(1).strip().rstrip(".,;")
+                    cand = re.split(r"\s+(?:có|chứa|để|với|tìm|file|hãy)\b", cand, flags=re.IGNORECASE)[0].strip()
+                    target_folder = cand
+        img_match = re.search(r"\[Đính kèm(?:\s+hình\s+ảnh)?:\s*([^\]]+)\]", user_message)
+        img_path = img_match.group(1).strip() if img_match else None
+
+        extracted_kws = None
+        if not img_path:
+            kw_match = re.search(r"(?:có\s+chữ|từ\s+khóa|nội\s+dung|bảng)\s+([^,\.\n:]+(?:,\s*[^,\.\n:]+)*)", user_message, re.IGNORECASE)
+            if kw_match:
+                extracted_kws = kw_match.group(1).strip()
+            else:
+                quotes = re.findall(r"[\"']([^\"']+)[\"']", user_message)
+                if quotes:
+                    extracted_kws = ", ".join(quotes)
+                else:
+                    extracted_kws = "Break/Snack, Form Class, Lunch, Assembly"
+
+        from app.tools.design_search_tools import tool_search_design_files_by_image_or_text
+        tool_res = tool_search_design_files_by_image_or_text(
+            folder_path=target_folder,
+            image_path=img_path,
+            keywords=extracted_kws
+        )
+        tool_calls.append({
+            "name": "search_design_files",
+            "args": {"folder_path": target_folder, "image_path": img_path},
+            "result": tool_res
+        })
+        response_parts.append(synthesize_tool_summary(tool_calls, user_message))
+
+    # 7. Daily Progress / Blocker Logging
     else:
         is_logging = any(w in msg_lower for w in ["hôm nay", "đã làm", "đang làm", "xong", "nghẽn", "blocker", "kẹt", "bị lỗi", "note", "task"])
         has_blocker = any(w in msg_lower for w in ["blocker", "nghẽn", "kẹt", "bị tắc", "chờ", "lỗi", "thiếu"])

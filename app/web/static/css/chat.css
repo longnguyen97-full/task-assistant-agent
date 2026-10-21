@@ -327,6 +327,127 @@
   display: block;
 }
 
+/* Collapsible Thinking Drawer for SSE Streaming */
+.agent-thinking-box {
+  margin: 6px 0 10px 0;
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid rgba(139, 92, 246, 0.25);
+  overflow: hidden;
+  font-family: var(--font-sans);
+  transition: all 0.25s ease;
+}
+
+.thinking-pill {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  cursor: pointer;
+  user-select: none;
+  background: rgba(139, 92, 246, 0.08);
+  transition: background 0.2s ease;
+}
+
+.thinking-pill:hover {
+  background: rgba(139, 92, 246, 0.16);
+  color: var(--text-main);
+}
+
+.thinking-pill.active {
+  color: #c084fc;
+}
+
+.thinking-pill.completed {
+  color: var(--text-dim);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.thinking-pill-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.thinking-pill-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #a855f7;
+  display: inline-block;
+  flex-shrink: 0;
+  box-shadow: 0 0 8px #a855f7;
+}
+
+.thinking-pill.active .thinking-pill-dot {
+  animation: pulseDot 1.2s infinite ease-in-out;
+}
+
+.thinking-pill.completed .thinking-pill-dot {
+  background: #10b981;
+  box-shadow: 0 0 6px #10b981;
+  animation: none;
+}
+
+.btn-toggle-thought-details {
+  background: transparent;
+  border: none;
+  color: inherit;
+  font-size: 0.75rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+.btn-toggle-thought-details:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.thought-steps-drawer {
+  padding: 10px 14px;
+  font-family: var(--font-mono);
+  font-size: 0.76rem;
+  color: var(--text-muted);
+  background: rgba(0, 0, 0, 0.35);
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.thought-step-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 6px;
+  line-height: 1.4;
+}
+
+.thought-step-item:last-child {
+  margin-bottom: 0;
+}
+
+.thought-step-item .step-icon {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.thought-step-item.active {
+  color: #38bdf8;
+}
+
+.thought-step-item.success {
+  color: #4ade80;
+}
+
 /* Markdown formatting inside chat */
 .markdown-body {
   font-size: 0.92rem;

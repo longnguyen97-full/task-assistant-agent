@@ -95,6 +95,33 @@
         <span class="field-hint">💡 Nếu chưa nhập SMTP, hệ thống sẽ tự động hoạt động ở chế độ <strong>Mô phỏng (Mock Outbox)</strong> và lưu lại toàn bộ email để xem trước.</span>
       </div>
 
+      <!-- Allowed Resources Whitelist Settings -->
+      <div class="settings-section">
+        <h4 class="settings-section-title"><i class="fa-solid fa-folder-tree"></i> Danh Sách Tài Nguyên Được Phép Truy Cập (Allowed Resources)</h4>
+        <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 12px;">
+          Agent chỉ xử lý quét tìm file và tài liệu thuộc các đường dẫn nằm trong danh sách này. Đường dẫn UNC phải bắt đầu bằng <code>\\</code> (ví dụ: <code>\\172.16.44.103\design$</code>).
+        </p>
+        
+        <div class="form-row" style="align-items: flex-end; margin-bottom: 10px;">
+          <div class="form-group flex-1">
+            <label>Tên Gợi Nhớ</label>
+            <input type="text" id="newResourceName" placeholder="Ví dụ: Design SMB Share">
+          </div>
+          <div class="form-group" style="flex: 2;">
+            <label>Đường Dẫn Tài Nguyên (Đúng chuẩn UNC)</label>
+            <input type="text" id="newResourcePath" placeholder="\\172.16.44.103\design$">
+          </div>
+          <button type="button" class="btn-action-primary" id="btnAddResourceBtn" style="height: 38px; margin-bottom: 2px;">
+            <i class="fa-solid fa-plus"></i> Thêm
+          </button>
+        </div>
+
+        <div id="allowedResourcesListContainer" style="max-height: 180px; overflow-y: auto; background: var(--bg-card); border: 1px solid var(--border-subtle); border-radius: 8px; padding: 8px;">
+          <!-- Dynamically populated via JS -->
+          <div style="font-size: 0.82rem; color: var(--text-muted); text-align: center; padding: 10px;">Đang tải danh sách tài nguyên...</div>
+        </div>
+      </div>
+
       <div class="modal-footer">
         <button type="button" class="btn-action-outline" id="btnCancelSettingsModal">Đóng</button>
         <button type="submit" class="btn-action-primary">Lưu Cài Đặt</button>

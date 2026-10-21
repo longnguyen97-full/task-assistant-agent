@@ -26,6 +26,7 @@ from app.tools.task_parser import parse_teams_or_email_message
 from app.tools.email_tools import tool_dispatch_email
 from app.tools.excel_tools import tool_import_tasks_from_excel
 from app.tools.storage_tier_tools import evaluate_project_storage_tiers, tool_set_project_storage_tier
+from app.tools.design_search_tools import tool_search_design_files_by_image_or_text
 
 # -------------------------------------------------------------
 # 1. TASK EXTRACTOR & STATE MANAGEMENT TOOLS
@@ -150,7 +151,7 @@ def log_change_request(project_name: str, title: str, content: str, author: str 
     except Exception as e:
         return json.dumps({"status": "error", "message": str(e)}, ensure_ascii=False)
 
-@tool
+@tool("analyze_project_plan_and_risks")
 def analyze_project_plan_and_risks_tool() -> str:
     """Đối chiếu tiến độ thực tế với kế hoạch từ RAG, tính toán nguy cơ trễ hạn (deadline risks) và đánh giá các blocker."""
     try:
@@ -217,7 +218,7 @@ def dispatch_email(to_email: str, subject: str, body: str, email_type: str = "da
     except Exception as e:
         return json.dumps({"status": "error", "message": str(e)}, ensure_ascii=False)
 
-@tool
+@tool("import_tasks_from_excel")
 def import_tasks_from_excel_tool(file_name_or_path: str) -> str:
     """Đọc file Excel (.xlsx, .xls) hoặc CSV để tự động bóc tách và tạo hàng loạt task vào Kanban."""
     try:
@@ -225,7 +226,7 @@ def import_tasks_from_excel_tool(file_name_or_path: str) -> str:
     except Exception as e:
         return json.dumps({"status": "error", "message": str(e)}, ensure_ascii=False)
 
-@tool
+@tool("delete_project")
 def delete_project_tool(project_name_or_id: str, delete_tasks: bool = False) -> str:
     """Xóa một dự án khỏi hệ thống.
     Tham số:
@@ -249,7 +250,7 @@ def delete_project_tool(project_name_or_id: str, delete_tasks: bool = False) -> 
     except Exception as e:
         return json.dumps({"status": "error", "message": str(e)}, ensure_ascii=False)
 
-@tool
+@tool("evaluate_project_storage_tiers")
 def evaluate_project_storage_tiers_tool() -> str:
     """Đánh giá, phân tích hoạt động của các dự án (qua số task đang chạy, độ ưu tiên, hạn chót và trao đổi trong chat) để ĐỀ XUẤT chuyển vùng Hot/Cold Storage.
     QUAN TRỌNG: Tool này CHỈ ĐƯA RA ĐỀ XUẤT và phân tích lý do, TUYỆT ĐỐI KHÔNG tự động chuyển tier của dự án mà không có sự xác nhận của developer."""
@@ -259,7 +260,7 @@ def evaluate_project_storage_tiers_tool() -> str:
     except Exception as e:
         return json.dumps({"status": "error", "message": str(e)}, ensure_ascii=False)
 
-@tool
+@tool("set_project_storage_tier")
 def set_project_storage_tier_tool(project_name_or_id: str, storage_tier: str) -> str:
     """Chuyển đổi phân vùng lưu trữ cho một dự án sang HOT hoặc COLD.
     CHỈ GỌI KHI: Developer có yêu cầu hoặc xác nhận rõ ràng (ví dụ: 'chuyển dự án X sang Cold', 'đồng ý đưa Y lên Hot').
@@ -269,6 +270,30 @@ def set_project_storage_tier_tool(project_name_or_id: str, storage_tier: str) ->
     try:
         res = tool_set_project_storage_tier(project_name_or_id=project_name_or_id, storage_tier=storage_tier)
         return json.dumps(res, ensure_ascii=False)
+    except Exception as e:
+        return json.dumps({"status": "error", "message": str(e)}, ensure_ascii=False)
+
+@tool
+def search_design_files(folder_path: str, image_path: Optional[str] = None, keywords: Optional[str] = None, max_results: int = 10) -> str:
+    """Quét tìm file thiết kế Adobe XD (.xd) trong thư mục chỉ định (hỗ trợ thư mục mạng LAN UNC như \\\\172.16.44.103\\design$ hoặc cục bộ)
+    dựa trên hình ảnh chụp màn hình thiết kế (tự động bóc tách đặc trưng bằng AI Vision) hoặc từ khóa do người dùng cung cấp.
+    
+    Quy tắc an toàn:
+    - Tự động kiểm tra Blacklist (chặn các thư mục hệ thống Windows nhạy cảm như C:\\Windows, C:\\Program Files...).
+    - Kiểm tra tính truy cập (báo lỗi nếu thư mục không tồn tại, mất kết nối mạng hoặc không có quyền truy cập).
+    
+    Tham số:
+    - folder_path: Đường dẫn thư mục cần quét (ví dụ: '\\\\172.16.44.103\\design$' hoặc 'D:\\Designs').
+    - image_path: Đường dẫn file ảnh chụp màn hình nếu người dùng đính kèm hình ảnh.
+    - keywords: Từ khóa tìm kiếm nếu người dùng nhập bằng chữ (ngăn cách bằng dấu phẩy).
+    - max_results: Số kết quả file tối đa cần lấy."""
+    try:
+        return tool_search_design_files_by_image_or_text(
+            folder_path=folder_path,
+            image_path=image_path,
+            keywords=keywords,
+            max_results=max_results
+        )
     except Exception as e:
         return json.dumps({"status": "error", "message": str(e)}, ensure_ascii=False)
 
@@ -289,7 +314,58 @@ TOOLS_REGISTRY = {
     "record_daily_note": record_daily_note,
     "dispatch_email": dispatch_email,
     "import_tasks_from_excel": import_tasks_from_excel_tool,
+    "search_design_files": search_design_files,
 }
 
 ALL_TOOLS = list(TOOLS_REGISTRY.values())
+
+def get_relevant_tools(user_message: str, provider: str = "ollama") -> List[Any]:
+    """Dynamic Tool Pruning & Budgeting (Tối ưu hóa Tool Attention cho Single-Agent).
+    Lọc và chọn tập 3-5 tools phù hợp nhất với intent của tin nhắn để giải phóng
+    tải attention của LLM, đặc biệt giúp mô hình 7B cục bộ (như Ollama Qwen)
+    gọi hàm chính xác 100% mà không bị quá tải.
+    """
+    msg_low = user_message.lower()
+    selected_tool_names = set()
+
+    # 1. Quét tìm tệp thiết kế / folder mạng
+    if any(k in msg_low for k in ["tìm file", "kiếm file", "quét folder", "scan file", "file xd", ".xd", "hình ảnh", "ảnh", "screenshot"]) or ("\\\\" in user_message or "\\" in user_message):
+        selected_tool_names.update(["search_design_files", "create_task", "record_daily_note"])
+
+    # 2. Họp WBS / Lập kế hoạch dự án / Change request
+    if any(k in msg_low for k in ["họp dự án", "dự án mới", "kế hoạch", "wbs", "timeline", "thay đổi specs", "change request", "rủi ro", "risk"]):
+        selected_tool_names.update(["plan_wbs", "log_change_request", "analyze_project_plan_and_risks", "create_task"])
+
+    # 3. Phân vùng lưu trữ Hot/Cold Storage
+    if any(k in msg_low for k in ["hot", "cold", "storage", "advisor", "lưu trữ", "phân vùng", "chuyển vùng"]):
+        selected_tool_names.update(["evaluate_project_storage_tiers", "set_project_storage_tier", "get_tasks"])
+
+    # 4. Xuất báo cáo tháng / Excel
+    if any(k in msg_low for k in ["báo cáo", "report", "tháng", "export", "excel"]):
+        selected_tool_names.update(["export_monthly_report", "record_daily_note", "get_tasks"])
+
+    # 5. Tra cứu specs / tài liệu RAG
+    if any(k in msg_low for k in ["specs", "đặc tả", "tài liệu", "hướng dẫn", "quy định", "quy chuẩn", "milestone", "kiến trúc"]):
+        selected_tool_names.update(["query_docs", "record_daily_note", "create_task"])
+
+    # 6. Gửi email
+    if any(k in msg_low for k in ["gửi mail", "gửi email", "send email", "dispatch mail"]):
+        selected_tool_names.update(["dispatch_email", "record_daily_note"])
+
+    # 7. Xóa dự án
+    if any(k in msg_low for k in ["xóa dự án", "xoá dự án", "delete project"]):
+        selected_tool_names.update(["delete_project", "get_tasks"])
+
+    # 8. Mặc định / Quản lý Task công việc hằng ngày
+    if not selected_tool_names or any(k in msg_low for k in ["task", "fix", "clone", "bug", "lỗi", "hoàn thành", "xong", "nghẽn", "blocker"]):
+        selected_tool_names.update(["create_task", "update_task", "get_tasks", "ingest_task_from_message", "record_daily_note"])
+
+    # Bổ sung các công cụ nền tảng nếu danh sách quá ngắn
+    if len(selected_tool_names) < 3:
+        selected_tool_names.add("create_task")
+        selected_tool_names.add("record_daily_note")
+
+    result = [TOOLS_REGISTRY[name] for name in selected_tool_names if name in TOOLS_REGISTRY]
+    return result
+
 

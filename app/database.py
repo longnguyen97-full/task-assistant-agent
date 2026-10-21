@@ -3,7 +3,7 @@ import sqlite3
 import json
 from datetime import datetime
 from pathlib import Path
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
 from app.config import settings
 
 def get_db_connection() -> sqlite3.Connection:
@@ -121,6 +121,14 @@ def init_db():
         fallback_triggered INTEGER DEFAULT 0,
         created_at TEXT NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS allowed_resources (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        path TEXT NOT NULL UNIQUE,
+        description TEXT DEFAULT '',
+        created_at TEXT NOT NULL
+    );
     """)
 
     # Safe migration for tasks table (source_type & website_name)
@@ -149,6 +157,20 @@ def init_db():
         INSERT INTO projects (name, status, timeline_doc, plan_summary, created_at)
         VALUES (?, ?, ?, ?, ?)
         """, default_projects)
+
+    # Seed default allowed_resources if empty
+    cursor.execute("SELECT COUNT(*) FROM allowed_resources")
+    if cursor.fetchone()[0] == 0:
+        now_iso = datetime.now().isoformat()
+        cursor.execute("""
+        INSERT INTO allowed_resources (name, path, description, created_at)
+        VALUES (?, ?, ?, ?)
+        """, (
+            "Design SMB Share",
+            r"\\172.16.44.103\design$",
+            "Ổ mạng chia sẻ tài liệu và tệp thiết kế UI/UX công ty",
+            now_iso
+        ))
 
     # Check if tasks table is empty, if so, seed sample tasks
     cursor.execute("SELECT COUNT(*) FROM tasks")
@@ -912,6 +934,69 @@ def db_get_recent_traces(limit: int = 30) -> List[Dict[str, Any]]:
     rows = [dict(row) for row in cursor.fetchall()]
     conn.close()
     return rows
+
+# -------------------------------------------------------------
+# ALLOWED RESOURCES HELPERS
+# -------------------------------------------------------------
+def db_get_all_allowed_resources() -> List[Dict[str, Any]]:
+    """Lấy danh sách toàn bộ các tài nguyên/đường dẫn được cấp phép (Allowed Resources)."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM allowed_resources ORDER BY id ASC")
+    rows = [dict(row) for row in cursor.fetchall()]
+    conn.close()
+    return rows
+
+def db_add_allowed_resource(name: str, path: str, description: str = "") -> Dict[str, Any]:
+    """Thêm hoặc cập nhật một tài nguyên/đường dẫn vào danh sách Allowed Resources."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    now_iso = datetime.now().isoformat()
+    clean_path = path.strip().strip('"').strip("'")
+    cursor.execute("""
+    INSERT INTO allowed_resources (name, path, description, created_at)
+    VALUES (?, ?, ?, ?)
+    ON CONFLICT(path) DO UPDATE SET
+        name=excluded.name,
+        description=excluded.description
+    """, (name.strip(), clean_path, description.strip(), now_iso))
+    conn.commit()
+    cursor.execute("SELECT * FROM allowed_resources WHERE path = ?", (clean_path,))
+    row = dict(cursor.fetchone())
+    conn.close()
+    return row
+
+def db_delete_allowed_resource(resource_id: int) -> bool:
+    """Xóa một tài nguyên khỏi danh sách cho phép theo ID."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM allowed_resources WHERE id = ?", (resource_id,))
+    deleted = cursor.rowcount > 0
+    conn.commit()
+    conn.close()
+    return deleted
+
+def db_is_path_allowed(check_path: str) -> Tuple[bool, Optional[Dict[str, Any]]]:
+    """Kiểm tra một đường dẫn có thuộc danh sách Allowed Resources (hoặc là thư mục con của resource đó) hay không."""
+    if not check_path or not check_path.strip():
+        return False, None
+
+    # Chuẩn hóa đường dẫn cần kiểm tra (giữ nguyên cấu trúc, không tự thêm slashes)
+    raw_p = check_path.strip().strip('"').strip("'").replace("/", "\\")
+    norm_p = os.path.normpath(raw_p).lower()
+
+    resources = db_get_all_allowed_resources()
+    for res in resources:
+        res_raw = res["path"].strip().strip('"').strip("'").replace("/", "\\")
+        res_norm = os.path.normpath(res_raw).lower()
+
+        # Khớp chính xác hoặc là thư mục con
+        if norm_p == res_norm:
+            return True, res
+        if norm_p.startswith(res_norm + "\\"):
+            return True, res
+
+    return False, None
 
 
 

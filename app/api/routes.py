@@ -1,8 +1,10 @@
+import re
 import shutil
 from pathlib import Path
 from datetime import datetime
 from typing import Optional
 from fastapi import APIRouter, UploadFile, File, HTTPException, Form, Response
+from fastapi.responses import FileResponse, StreamingResponse
 from app.config import settings
 from app.reports.monthly_report import generate_monthly_report_excel
 from app.models import (
@@ -18,7 +20,8 @@ from app.models import (
     NewProjectPlanRequest,
     ChangeNoteCreateRequest,
     DocumentScopeUpdateRequest,
-    ProjectStorageTierUpdateRequest
+    ProjectStorageTierUpdateRequest,
+    AllowedResourceCreate
 )
 from app.database import (
     db_get_all_tasks,
@@ -40,7 +43,10 @@ from app.database import (
     db_get_registered_sites,
     db_update_project_storage_tier,
     db_get_telemetry_stats,
-    db_get_recent_traces
+    db_get_recent_traces,
+    db_get_all_allowed_resources,
+    db_add_allowed_resource,
+    db_delete_allowed_resource
 )
 from app.tools.storage_tier_tools import evaluate_project_storage_tiers
 from app.tools.task_parser import parse_teams_or_email_message
@@ -50,7 +56,7 @@ from app.tools.planning_tools import (
     tool_analyze_project_plan_and_risks
 )
 from app.tools.email_tools import tool_dispatch_email
-from app.agent.graph import execute_react_agent, execute_chat, request_agent_cancellation
+from app.agent.graph import execute_react_agent, execute_chat, request_agent_cancellation, stream_react_agent
 from app.rag.vector_store import (
     get_rag_stats,
     index_documents,
@@ -70,6 +76,21 @@ async def chat_endpoint(req: ChatRequest):
     response = execute_chat(user_message=req.message, author=req.author or "Developer")
     return response
 
+@api_router.post("/chat/stream")
+async def chat_stream_endpoint(req: ChatRequest):
+    if not req.message.strip():
+        raise HTTPException(status_code=400, detail="Nội dung tin nhắn không được để trống")
+    
+    return StreamingResponse(
+        stream_react_agent(user_message=req.message, author=req.author or "Developer"),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no"
+        }
+    )
+
 @api_router.post("/chat/cancel")
 async def cancel_chat_endpoint():
     request_agent_cancellation()
@@ -79,6 +100,37 @@ async def cancel_chat_endpoint():
 @api_router.get("/chat/history")
 async def get_chat_history_endpoint(limit: int = 50):
     return db_get_chat_history(limit=limit)
+
+@api_router.post("/chat/upload-image")
+async def upload_chat_image_endpoint(file: UploadFile = File(...)):
+    allowed_exts = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif"}
+    file_ext = Path(file.filename).suffix.lower()
+    if file_ext not in allowed_exts:
+        raise HTTPException(status_code=400, detail="Chỉ hỗ trợ file hình ảnh (.png, .jpg, .jpeg, .webp, .bmp)")
+
+    uploads_dir = settings.DATA_DIR / "uploads"
+    uploads_dir.mkdir(parents=True, exist_ok=True)
+
+    clean_stem = re.sub(r"[^\w\-_\.]", "_", Path(file.filename).stem)
+    unique_name = f"{clean_stem}_{datetime.now().strftime('%Y%m%d_%H%M%S')}{file_ext}"
+    destination = uploads_dir / unique_name
+
+    with open(destination, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+
+    return {
+        "success": True,
+        "file_name": file.filename,
+        "file_path": str(destination),
+        "url": f"/api/chat/images/{unique_name}"
+    }
+
+@api_router.get("/chat/images/{filename}")
+async def get_chat_image_endpoint(filename: str):
+    file_path = settings.DATA_DIR / "uploads" / filename
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="Không tìm thấy hình ảnh")
+    return FileResponse(file_path)
 
 # --- 2. TASKS ENDPOINTS ---
 @api_router.get("/tasks")
@@ -519,6 +571,42 @@ async def run_benchmark_endpoint():
         return report
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Lỗi khi thực thi benchmark suite: {e}")
+
+# --- 12. ALLOWED RESOURCES ENDPOINTS ---
+@api_router.get("/resources")
+async def get_allowed_resources_endpoint():
+    resources = db_get_all_allowed_resources()
+    return {"resources": resources, "total": len(resources)}
+
+@api_router.post("/resources")
+async def add_allowed_resource_endpoint(req: AllowedResourceCreate):
+    path = req.path.strip()
+    if not path:
+        raise HTTPException(status_code=400, detail="Đường dẫn resource không được để trống.")
+    
+    # Check if user typed single slash UNC like \172...
+    if path.startswith("\\") and not path.startswith("\\\\"):
+        raise HTTPException(
+            status_code=400, 
+            detail="Đường dẫn UNC không hợp lệ (bắt đầu bằng 1 dấu gạch '\\'). Vui lòng dùng 2 dấu gạch chéo ngược '\\\\' ví dụ: \\\\server\\share"
+        )
+    
+    res = db_add_allowed_resource(
+        name=req.name,
+        path=path,
+        description=req.description or ""
+    )
+    if not res:
+        raise HTTPException(status_code=400, detail=f"Không thể thêm resource. Đường dẫn '{path}' có thể đã tồn tại.")
+    return {"success": True, "message": f"Đã thêm resource '{res['name']}' thành công!", "resource": res}
+
+@api_router.delete("/resources/{resource_id}")
+async def delete_allowed_resource_endpoint(resource_id: int):
+    success = db_delete_allowed_resource(resource_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Không tìm thấy resource để xóa")
+    return {"success": True, "message": f"Đã xóa resource #{resource_id} thành công!"}
+
 
 
 

@@ -261,6 +261,7 @@ function initSettingsModal() {
   if (apiKeyStatusBadge) {
     apiKeyStatusBadge.addEventListener('click', () => {
       loadSettings();
+      loadAllowedResources();
       settingsModal?.classList.add('active');
     });
   }
@@ -268,6 +269,7 @@ function initSettingsModal() {
   if (btnOpenSettings) {
     btnOpenSettings.addEventListener('click', () => {
       loadSettings();
+      loadAllowedResources();
       settingsModal?.classList.add('active');
     });
   }
@@ -330,8 +332,97 @@ function initSettingsModal() {
       }
     });
   }
+
+  // Allowed Resources Event Handlers
+  const btnAddResource = document.getElementById('btnAddResourceBtn');
+  if (btnAddResource) {
+    btnAddResource.addEventListener('click', async () => {
+      const nameInput = document.getElementById('newResourceName');
+      const pathInput = document.getElementById('newResourcePath');
+      const name = nameInput?.value.trim() || 'Custom Resource';
+      const path = pathInput?.value.trim() || '';
+
+      if (!path) {
+        showToast('Vui lòng nhập đường dẫn tài nguyên', 'warning');
+        return;
+      }
+
+      if (path.startsWith('\\') && !path.startsWith('\\\\')) {
+        showToast("Đường dẫn mạng UNC sai định dạng. Cần bắt đầu bằng 2 dấu gạch chéo ngược '\\\\'", 'error');
+        return;
+      }
+
+      try {
+        const res = await fetch('/api/resources', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, path, description: '' })
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          showToast(data.message, 'success');
+          if (nameInput) nameInput.value = '';
+          if (pathInput) pathInput.value = '';
+          loadAllowedResources();
+        } else {
+          showToast(data.detail || 'Lỗi khi thêm tài nguyên', 'error');
+        }
+      } catch (err) {
+        showToast('Lỗi kết nối khi thêm tài nguyên', 'error');
+      }
+    });
+  }
 }
 window.initSettingsModal = initSettingsModal;
+
+async function loadAllowedResources() {
+  const container = document.getElementById('allowedResourcesListContainer');
+  if (!container) return;
+
+  try {
+    const res = await fetch('/api/resources');
+    if (!res.ok) return;
+    const data = await res.json();
+    const resources = data.resources || [];
+
+    if (resources.length === 0) {
+      container.innerHTML = '<div style="font-size: 0.82rem; color: var(--text-muted); text-align: center; padding: 10px;">Chưa có tài nguyên nào được cấu hình.</div>';
+      return;
+    }
+
+    container.innerHTML = resources.map(r => `
+      <div style="display: flex; align-items: center; justify-content: space-between; padding: 6px 10px; border-bottom: 1px solid rgba(255,255,255,0.06); font-size: 0.82rem;">
+        <div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-right: 10px;">
+          <strong style="color: var(--accent-purple);"><i class="fa-solid fa-folder-open"></i> ${escapeHtml(r.name)}</strong>: 
+          <code style="background: rgba(0,0,0,0.3); padding: 2px 6px; border-radius: 4px; color: #a5f3fc;">${escapeHtml(r.path)}</code>
+        </div>
+        <button type="button" class="btn-icon-tiny text-danger" onclick="deleteAllowedResource(${r.id})" title="Xóa tài nguyên này">
+          <i class="fa-solid fa-trash"></i>
+        </button>
+      </div>
+    `).join('');
+  } catch (err) {
+    console.error('Error loading allowed resources:', err);
+  }
+}
+window.loadAllowedResources = loadAllowedResources;
+
+window.deleteAllowedResource = async function(resourceId) {
+  if (!confirm('Bạn có chắc chắn muốn xóa tài nguyên này khỏi danh sách Allowed Resources?')) return;
+  try {
+    const res = await fetch(`/api/resources/${resourceId}`, { method: 'DELETE' });
+    const data = await res.json();
+    if (res.ok && data.success) {
+      window.showToast?.(data.message, 'success');
+      loadAllowedResources();
+    } else {
+      window.showToast?.(data.detail || 'Lỗi khi xóa tài nguyên', 'error');
+    }
+  } catch (err) {
+    window.showToast?.('Lỗi kết nối khi xóa tài nguyên', 'error');
+  }
+};
+
 
 // Global Project Storage Tier Helper
 window.switchProjectTier = async function (projectId, targetTier) {

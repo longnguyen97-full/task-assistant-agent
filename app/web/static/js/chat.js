@@ -57,7 +57,7 @@ function appendChatMessage(role, content, toolCalls = [], timestamp = null, metr
 
   let toolBadgesHtml = '';
   if (toolCalls && toolCalls.length > 0) {
-    toolBadgesHtml = toolCalls.map(tc => `
+    const badges = toolCalls.map(tc => `
       <div class="tool-execution-badge">
         <div class="tool-badge-header" onclick="this.nextElementSibling.classList.toggle('open')">
           <span><i class="fa-solid fa-gear"></i> Executed Tool: <strong>${tc.name}</strong></span>
@@ -69,6 +69,23 @@ function appendChatMessage(role, content, toolCalls = [], timestamp = null, metr
         </div>
       </div>
     `).join('');
+
+    toolBadgesHtml = `
+      <div class="agent-thinking-box">
+        <div class="thinking-pill completed" onclick="const d = this.nextElementSibling; const isHidden = d.style.display === 'none'; d.style.display = isHidden ? 'block' : 'none'; const ch = this.querySelector('i.fa-chevron-down, i.fa-chevron-up'); if(ch){ ch.className = isHidden ? 'fa-solid fa-chevron-up' : 'fa-solid fa-chevron-down'; }">
+          <div class="thinking-pill-left">
+            <span class="thinking-pill-dot"></span>
+            <span><i class="fa-solid fa-brain"></i> Quá trình suy nghĩ & thực thi (${toolCalls.length} công cụ)</span>
+          </div>
+          <button type="button" class="btn-toggle-thought-details">
+            <span>Chi tiết</span> <i class="fa-solid fa-chevron-down"></i>
+          </button>
+        </div>
+        <div class="thought-steps-drawer" style="display: none;">
+          ${badges}
+        </div>
+      </div>
+    `;
   }
 
   let telemetryHtml = '';
@@ -208,27 +225,48 @@ async function handleSendMessage(messageText) {
   // If file attached, upload first
   if (selectedAttachment) {
     attachedName = selectedAttachment.name;
+    const isImage = selectedAttachment.type.startsWith('image/') || /\.(png|jpe?g|webp|bmp|gif)$/i.test(attachedName);
     const formData = new FormData();
     formData.append('file', selectedAttachment);
 
-    window.showToast?.(`Đang tải lên & index tài liệu: ${attachedName}...`, 'info');
-    try {
-      const upRes = await fetch('/api/docs/upload', {
-        method: 'POST',
-        body: formData
-      });
-      if (upRes.ok) {
-        const upData = await upRes.json();
-        if (upData.excel_import && window.loadTasks) {
-          window.loadTasks();
+    if (isImage) {
+      window.showToast?.(`Đang tải lên hình ảnh thiết kế: ${attachedName}...`, 'info');
+      try {
+        const upRes = await fetch('/api/chat/upload-image', {
+          method: 'POST',
+          body: formData
+        });
+        if (upRes.ok) {
+          const upData = await upRes.json();
+          outgoingText = outgoingText
+            ? `[Đính kèm hình ảnh: ${upData.file_path}]\n${outgoingText}`
+            : `[Đính kèm hình ảnh: ${upData.file_path}]\nHãy phân tích hình ảnh này và tìm kiếm file thiết kế tương ứng.`;
+        } else {
+          window.showToast?.('Lỗi khi tải ảnh lên máy chủ', 'error');
         }
-        if (window.loadDocs) window.loadDocs();
-        outgoingText = outgoingText 
-          ? `[Đính kèm: ${attachedName}]\n${outgoingText}`
-          : `Tôi vừa gửi tài liệu: "${attachedName}". Hãy kiểm tra, trích xuất thông tin và ghi nhận công việc cần làm giúp tôi.`;
+      } catch (e) {
+        console.error('Image upload failed:', e);
       }
-    } catch (e) {
-      console.error('File upload failed:', e);
+    } else {
+      window.showToast?.(`Đang tải lên & index tài liệu: ${attachedName}...`, 'info');
+      try {
+        const upRes = await fetch('/api/docs/upload', {
+          method: 'POST',
+          body: formData
+        });
+        if (upRes.ok) {
+          const upData = await upRes.json();
+          if (upData.excel_import && window.loadTasks) {
+            window.loadTasks();
+          }
+          if (window.loadDocs) window.loadDocs();
+          outgoingText = outgoingText 
+            ? `[Đính kèm: ${attachedName}]\n${outgoingText}`
+            : `Tôi vừa gửi tài liệu: "${attachedName}". Hãy kiểm tra, trích xuất thông tin và ghi nhận công việc cần làm giúp tôi.`;
+        }
+      } catch (e) {
+        console.error('File upload failed:', e);
+      }
     }
 
     selectedAttachment = null;
@@ -242,41 +280,308 @@ async function handleSendMessage(messageText) {
     chatInput.style.height = 'auto';
   }
 
-  appendTypingIndicator();
+function createStreamingAssistantBubble() {
+  const chatMessages = document.getElementById('chatMessages');
+  if (!chatMessages) return null;
+
+  const wrapper = document.createElement('div');
+  wrapper.className = 'message-wrapper assistant';
+
+  wrapper.innerHTML = `
+    <div class="msg-avatar"><i class="fa-solid fa-robot"></i></div>
+    <div class="msg-bubble">
+      <div class="msg-header">
+        <span class="sender-name">Task Assistant</span>
+        <span class="msg-time">Đang trả lời...</span>
+      </div>
+      <div class="agent-thinking-box" id="currentThinkingBox">
+        <div class="thinking-pill active" id="currentThinkingPill">
+          <div class="thinking-pill-left">
+            <span class="thinking-pill-dot"></span>
+            <span id="currentThinkingStatusText"><i class="fa-solid fa-brain"></i> Đang khởi tạo...</span>
+          </div>
+          <button type="button" class="btn-toggle-thought-details" id="currentBtnToggleDetails">
+            <span>Chi tiết</span> <i class="fa-solid fa-chevron-down"></i>
+          </button>
+        </div>
+        <div class="thought-steps-drawer" id="currentThoughtDrawer" style="display: none;">
+          <!-- Chi tiết suy nghĩ và công cụ được giấu ở đây, bấm Chi Tiết mới mở -->
+        </div>
+      </div>
+      <div class="msg-content markdown-body" id="currentStreamingContent">
+        <span class="streaming-cursor" style="color: var(--accent-purple); font-size: 0.85rem;"><i class="fa-solid fa-circle-notch fa-spin"></i> Đang chuẩn bị phản hồi...</span>
+      </div>
+      <div class="msg-telemetry-badge" id="currentTelemetryBadge" style="display: none;"></div>
+    </div>
+  `;
+
+  // Thiết lập sự kiện toggle cho drawer suy nghĩ
+  const pill = wrapper.querySelector('#currentThinkingPill');
+  const drawer = wrapper.querySelector('#currentThoughtDrawer');
+  const toggleBtn = wrapper.querySelector('#currentBtnToggleDetails');
+
+  const toggleHandler = (e) => {
+    e.stopPropagation();
+    const isHidden = drawer.style.display === 'none';
+    drawer.style.display = isHidden ? 'block' : 'none';
+    const chevron = toggleBtn.querySelector('i');
+    if (chevron) {
+      chevron.className = isHidden ? 'fa-solid fa-chevron-up' : 'fa-solid fa-chevron-down';
+    }
+  };
+
+  if (pill) pill.onclick = toggleHandler;
+  if (toggleBtn) toggleBtn.onclick = toggleHandler;
+
+  chatMessages.appendChild(wrapper);
+  chatMessages.scrollTop = chatMessages.scrollHeight;
+
+  return {
+    wrapper,
+    statusText: wrapper.querySelector('#currentThinkingStatusText'),
+    pill,
+    drawer,
+    contentEl: wrapper.querySelector('#currentStreamingContent'),
+    telemetryEl: wrapper.querySelector('#currentTelemetryBadge')
+  };
+}
+
+async function handleSendMessage(messageText) {
+  const chatInput = document.getElementById('chatInput');
+  const btnSendMessage = document.getElementById('btnSendMessage');
+  const previewBox = document.getElementById('chatAttachmentPreview');
+  const fileInput = document.getElementById('chatFileInput');
+  const chatMessages = document.getElementById('chatMessages');
+
+  if ((!messageText && !selectedAttachment) || isSendingMessage) return;
+
+  isSendingMessage = true;
+  lastSubmittedMessageText = messageText || '';
+
+  // Đổi nút Gửi sang nút Dừng khi đang xử lý
+  if (btnSendMessage) {
+    btnSendMessage.disabled = false;
+    btnSendMessage.classList.add('btn-send-stop');
+    btnSendMessage.innerHTML = '<i class="fa-solid fa-stop"></i>';
+    btnSendMessage.title = 'Dừng suy nghĩ & Sửa lại tin nhắn (Esc)';
+  }
+
+  let outgoingText = messageText || '';
+  let attachedName = '';
+
+  // Xử lý đính kèm nếu có
+  if (selectedAttachment) {
+    attachedName = selectedAttachment.name;
+    const isImage = selectedAttachment.type.startsWith('image/') || /\.(png|jpe?g|webp|bmp|gif)$/i.test(attachedName);
+    const formData = new FormData();
+    formData.append('file', selectedAttachment);
+
+    if (isImage) {
+      window.showToast?.(`Đang tải lên hình ảnh thiết kế: ${attachedName}...`, 'info');
+      try {
+        const upRes = await fetch('/api/chat/upload-image', {
+          method: 'POST',
+          body: formData
+        });
+        if (upRes.ok) {
+          const upData = await upRes.json();
+          outgoingText = outgoingText
+            ? `[Đính kèm hình ảnh: ${upData.file_path}]\n${outgoingText}`
+            : `[Đính kèm hình ảnh: ${upData.file_path}]\nHãy phân tích hình ảnh này và tìm kiếm file thiết kế tương ứng.`;
+        } else {
+          window.showToast?.('Lỗi khi tải ảnh lên máy chủ', 'error');
+        }
+      } catch (e) {
+        console.error('Image upload failed:', e);
+      }
+    } else {
+      window.showToast?.(`Đang tải lên & index tài liệu: ${attachedName}...`, 'info');
+      try {
+        const upRes = await fetch('/api/docs/upload', {
+          method: 'POST',
+          body: formData
+        });
+        if (upRes.ok) {
+          const upData = await upRes.json();
+          if (upData.excel_import && window.loadTasks) {
+            window.loadTasks();
+          }
+          if (window.loadDocs) window.loadDocs();
+          outgoingText = outgoingText 
+            ? `[Đính kèm: ${attachedName}]\n${outgoingText}`
+            : `Tôi vừa gửi tài liệu: "${attachedName}". Hãy kiểm tra, trích xuất thông tin và ghi nhận công việc cần làm giúp tôi.`;
+        }
+      } catch (e) {
+        console.error('File upload failed:', e);
+      }
+    }
+
+    selectedAttachment = null;
+    if (fileInput) fileInput.value = '';
+    if (previewBox) previewBox.style.display = 'none';
+  }
+
+  appendChatMessage('user', outgoingText);
+  if (chatInput) {
+    chatInput.value = '';
+    chatInput.style.height = 'auto';
+  }
 
   currentChatAbortController = new AbortController();
+  const streamUi = createStreamingAssistantBubble();
+
+  let accumulatedMarkdown = '';
+  let toolCallsList = [];
 
   try {
-    const res = await fetch('/api/chat', {
+    const response = await fetch('/api/chat/stream', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ message: outgoingText, author: 'Developer' }),
       signal: currentChatAbortController.signal
     });
 
-    removeTypingIndicator();
-
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
       window.showToast?.(err.detail || 'Lỗi khi gửi tin nhắn', 'error');
-      appendChatMessage('assistant', '⚠️ Đã xảy ra lỗi khi kết nối với AI Agent. Vui lòng thử lại.');
-    } else {
-      const data = await res.json();
-      if (!data.cancelled) {
-        appendChatMessage('assistant', data.content, data.tool_calls, null, data.metrics);
-        if (window.loadTasks) window.loadTasks();
-        if (window.loadDailyNotes) window.loadDailyNotes();
-        if (window.updateStatsAndProgress) window.updateStatsAndProgress();
+      if (streamUi && streamUi.contentEl) {
+        streamUi.contentEl.innerHTML = '<p>⚠️ Đã xảy ra lỗi khi kết nối với AI Agent. Vui lòng thử lại.</p>';
+        streamUi.pill.classList.remove('active');
+        streamUi.pill.classList.add('completed');
+        streamUi.statusText.innerHTML = '<i class="fa-solid fa-triangle-exclamation text-danger"></i> Đã xảy ra lỗi';
+      }
+      return;
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder('utf-8');
+    let buffer = '';
+
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop(); // Giữ lại phần chưa hoàn thành dòng
+
+      let currentEvent = 'message';
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed) continue;
+
+        if (trimmed.startsWith('event:')) {
+          currentEvent = trimmed.slice(6).trim();
+        } else if (trimmed.startsWith('data:')) {
+          const rawData = trimmed.slice(5).trim();
+          try {
+            const data = JSON.parse(rawData);
+
+            // 1. Cập nhật Status
+            if (currentEvent === 'status') {
+              if (streamUi && streamUi.statusText) {
+                streamUi.statusText.innerHTML = escapeHtml(data.message);
+              }
+              if (streamUi && streamUi.drawer) {
+                const item = document.createElement('div');
+                item.className = 'thought-step-item active';
+                item.innerHTML = `<i class="fa-solid fa-circle-check step-icon text-cyan"></i> <span>${escapeHtml(data.message)}</span>`;
+                streamUi.drawer.appendChild(item);
+                streamUi.drawer.scrollTop = streamUi.drawer.scrollHeight;
+              }
+            } 
+            // 2. Cập nhật Tool Start
+            else if (currentEvent === 'tool_start') {
+              if (streamUi && streamUi.statusText) {
+                streamUi.statusText.innerHTML = `⚡ Đang chạy công cụ: <strong>${escapeHtml(data.name)}</strong>...`;
+              }
+              if (streamUi && streamUi.drawer) {
+                const item = document.createElement('div');
+                item.className = 'thought-step-item active';
+                item.innerHTML = `<i class="fa-solid fa-gear fa-spin step-icon text-purple"></i> <span>Gọi công cụ <code>${escapeHtml(data.name)}</code>: <small>${escapeHtml(JSON.stringify(data.args))}</small></span>`;
+                streamUi.drawer.appendChild(item);
+                streamUi.drawer.scrollTop = streamUi.drawer.scrollHeight;
+              }
+            } 
+            // 3. Cập nhật Tool End
+            else if (currentEvent === 'tool_end') {
+              toolCallsList.push({ name: data.name, result: data.result });
+              if (streamUi && streamUi.statusText) {
+                streamUi.statusText.innerHTML = `✅ Hoàn thành công cụ: <strong>${escapeHtml(data.name)}</strong>`;
+              }
+              if (streamUi && streamUi.drawer) {
+                const item = document.createElement('div');
+                item.className = 'thought-step-item success';
+                item.innerHTML = `<i class="fa-solid fa-check step-icon text-green"></i> <span>Hoàn tất <code>${escapeHtml(data.name)}</code></span>`;
+                streamUi.drawer.appendChild(item);
+                streamUi.drawer.scrollTop = streamUi.drawer.scrollHeight;
+              }
+            } 
+            // 4. Stream từng Token (Nội dung chính hiển thị ở dưới, drawer suy nghĩ ẩn giấu)
+            else if (currentEvent === 'token') {
+              accumulatedMarkdown += data.token;
+              if (streamUi && streamUi.contentEl) {
+                streamUi.contentEl.innerHTML = marked.parse(accumulatedMarkdown);
+                if (chatMessages) chatMessages.scrollTop = chatMessages.scrollHeight;
+              }
+              // Chuyển status pill sang completed (giấu nhẹm vào accordion)
+              if (streamUi && streamUi.pill && streamUi.pill.classList.contains('active')) {
+                streamUi.pill.classList.remove('active');
+                streamUi.pill.classList.add('completed');
+                const tcCount = toolCallsList.length;
+                const tcText = tcCount > 0 ? ` (${tcCount} công cụ)` : '';
+                streamUi.statusText.innerHTML = `<i class="fa-solid fa-brain"></i> Quá trình suy nghĩ & thực thi${tcText} (Bấm xem chi tiết)`;
+              }
+            } 
+            // 5. Done event
+            else if (currentEvent === 'done') {
+              if (data.content && !accumulatedMarkdown) {
+                accumulatedMarkdown = data.content;
+              }
+              if (streamUi && streamUi.contentEl) {
+                streamUi.contentEl.innerHTML = marked.parse(accumulatedMarkdown);
+              }
+              if (streamUi && streamUi.pill) {
+                streamUi.pill.classList.remove('active');
+                streamUi.pill.classList.add('completed');
+                const tcCount = (data.tool_calls || toolCallsList).length;
+                const tcText = tcCount > 0 ? ` • Đã dùng ${tcCount} công cụ` : '';
+                const latStr = data.metrics?.latency_ms ? ` • ${(data.metrics.latency_ms/1000).toFixed(1)}s` : '';
+                streamUi.statusText.innerHTML = `<i class="fa-solid fa-check text-green"></i> Đã hoàn tất${latStr}${tcText} (Bấm xem chi tiết)`;
+              }
+              // Telemetry badges
+              if (streamUi && streamUi.telemetryEl && data.metrics) {
+                const m = data.metrics;
+                const latSec = (m.latency_ms ? (m.latency_ms / 1000).toFixed(2) : '0.00') + 's';
+                const tokCount = (m.total_tokens || 0).toLocaleString();
+                const costUsd = m.cost_usd ? `$${m.cost_usd.toFixed(5)}` : '$0.00';
+                const modelLabel = m.model || 'Agent';
+                streamUi.telemetryEl.style.display = 'flex';
+                streamUi.telemetryEl.innerHTML = `
+                  <span class="telemetry-pill lat"><i class="fa-solid fa-bolt"></i> ${latSec}</span>
+                  <span class="telemetry-pill tok"><i class="fa-solid fa-coins"></i> ${tokCount} tok</span>
+                  <span class="telemetry-pill cost"><i class="fa-solid fa-dollar-sign"></i> ${costUsd}</span>
+                  <span class="telemetry-pill model"><i class="fa-solid fa-microchip"></i> ${modelLabel}</span>
+                `;
+              }
+              // Cập nhật ngầm Bảng Tasks và Notes
+              if (window.loadTasks) window.loadTasks();
+              if (window.loadDailyNotes) window.loadDailyNotes();
+              if (window.updateStatsAndProgress) window.updateStatsAndProgress();
+            }
+          } catch (e) {
+            console.error('Error parsing SSE event data:', e);
+          }
+        }
       }
     }
   } catch (err) {
-    removeTypingIndicator();
     if (err.name === 'AbortError') {
       console.log('Chat fetch aborted by user.');
       return;
     }
     console.error(err);
-    window.showToast?.('Lỗi mạng khi kết nối server', 'error');
+    window.showToast?.('Lỗi mạng khi kết nối server streaming', 'error');
   } finally {
     isSendingMessage = false;
     currentChatAbortController = null;
@@ -285,7 +590,6 @@ async function handleSendMessage(messageText) {
       btnSendMessage.classList.remove('btn-send-stop');
       btnSendMessage.innerHTML = '<i class="fa-solid fa-arrow-up"></i>';
       btnSendMessage.title = 'Gửi tin nhắn';
-    }
   }
 }
 window.handleSendMessage = handleSendMessage;
@@ -460,6 +764,28 @@ function initChat() {
         selectedAttachment = null;
         fileInput.value = '';
         previewBox.style.display = 'none';
+      });
+    }
+
+    // Support Clipboard Paste (Ctrl+V) for screenshots directly in chat
+    if (chatInput) {
+      chatInput.addEventListener('paste', (e) => {
+        const items = (e.clipboardData || window.clipboardData)?.items;
+        if (!items) return;
+        for (let i = 0; i < items.length; i++) {
+          if (items[i].type.indexOf('image') !== -1) {
+            const blob = items[i].getAsFile();
+            if (blob) {
+              const fileName = `screenshot_${Date.now()}.png`;
+              selectedAttachment = new File([blob], fileName, { type: blob.type });
+              if (previewName) previewName.textContent = fileName;
+              if (previewIcon) previewIcon.className = 'fa-solid fa-file-image text-purple';
+              previewBox.style.display = 'block';
+              window.showToast?.('Đã nhận ảnh chụp màn hình từ Clipboard! Hãy nhập đường dẫn cần quét (ví dụ: \\\\172.16.44.103\\design$).', 'info');
+              break;
+            }
+          }
+        }
       });
     }
   }

@@ -90,4 +90,9 @@ class DocumentScopeUpdateRequest(BaseModel):
 class ProjectStorageTierUpdateRequest(BaseModel):
     storage_tier: str = Field(..., description="HOT hoặc COLD")
 
+class AllowedResourceCreate(BaseModel):
+    name: str = Field(..., description="Tên định danh tài nguyên (ví dụ: Design Shared Folder)")
+    path: str = Field(..., description="Đường dẫn thư mục hợp lệ (ví dụ: \\\\172.16.44.103\\design$)")
+    description: Optional[str] = Field("", description="Mô tả tài nguyên")
+
 
